@@ -8,18 +8,27 @@ import (
 )
 
 func main() {
+	handler, err := newServerHandler()
+	if err != nil {
+		panic(err)
+	}
+	if err := http.ListenAndServe(":8080", handler); err != nil {
+		panic(err)
+	}
+}
+
+func newServerHandler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	storage := repository.NewMemStorage()
 	srv, err := service.NewMetricService(storage)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	metricsHandler, err := handler.NewMetricsHandler(srv)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	mux.HandleFunc("/update/", metricsHandler.UpdateMetric)
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		panic(err)
-	}
+
+	return mux, nil
 }

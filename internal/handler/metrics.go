@@ -3,9 +3,11 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"github.com/tomkqwe/metrics/internal/service"
+	"log"
 	"net/http"
 	"strings"
+
+	"github.com/tomkqwe/metrics/internal/service"
 )
 
 var (
@@ -50,6 +52,8 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
