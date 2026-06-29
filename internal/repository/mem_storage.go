@@ -1,6 +1,10 @@
 package repository
 
-import "github.com/tomkqwe/metrics/internal/model"
+import (
+	"sort"
+
+	"github.com/tomkqwe/metrics/internal/model"
+)
 
 type MemStorage struct {
 	gaugeStore   map[string]models.Gauge   // name => value
@@ -19,5 +23,45 @@ func (m *MemStorage) UpdateGauge(name string, value models.Gauge) {
 }
 
 func (m *MemStorage) UpdateCounter(name string, value models.Counter) {
-	m.counterStore[name] = value
+
+	m.counterStore[name] += value
+}
+
+func (m *MemStorage) GetGauge(name string) (models.Gauge, bool) {
+	value, ok := m.gaugeStore[name]
+	return value, ok
+}
+
+func (m *MemStorage) GetCounter(name string) (models.Counter, bool) {
+	value, ok := m.counterStore[name]
+	return value, ok
+}
+
+func (m *MemStorage) Snapshot() []models.Metric {
+	metrics := make([]models.Metric, 0, len(m.gaugeStore)+len(m.counterStore))
+	for name, value := range m.gaugeStore {
+		gaugeValue := float64(value)
+		metrics = append(metrics, models.Metric{
+			ID:    name,
+			MType: models.MetricTypeGauge,
+			Value: &gaugeValue,
+		})
+	}
+	for name, value := range m.counterStore {
+		counterValue := int64(value)
+		metrics = append(metrics, models.Metric{
+			ID:    name,
+			MType: models.MetricTypeCounter,
+			Delta: &counterValue,
+		})
+	}
+
+	sort.Slice(metrics, func(i, j int) bool {
+		if metrics[i].MType == metrics[j].MType {
+			return metrics[i].ID < metrics[j].ID
+		}
+		return metrics[i].MType < metrics[j].MType
+	})
+
+	return metrics
 }

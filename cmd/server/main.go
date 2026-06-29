@@ -1,10 +1,12 @@
 package main
 
 import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/repository"
 	"github.com/tomkqwe/metrics/internal/service"
-	"net/http"
 )
 
 func main() {
@@ -18,7 +20,7 @@ func main() {
 }
 
 func newServerHandler() (http.Handler, error) {
-	mux := http.NewServeMux()
+	router := chi.NewRouter()
 	storage := repository.NewMemStorage()
 	srv, err := service.NewMetricService(storage)
 	if err != nil {
@@ -28,7 +30,9 @@ func newServerHandler() (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	mux.HandleFunc("/update/", metricsHandler.UpdateMetric)
+	router.Post("/update/{metricType}/{metricName}/{rawValue}", metricsHandler.UpdateMetric)
+	router.Get("/value/{metricType}/{metricName}", metricsHandler.GetMetricValue)
+	router.Get("/", metricsHandler.ListMetrics)
 
-	return mux, nil
+	return router, nil
 }

@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	models "github.com/tomkqwe/metrics/internal/model"
 )
 
 func TestNewMetricsHandlerReturnsErrorForNilService(t *testing.T) {
@@ -22,7 +25,7 @@ func TestMetricsHandlerUpdateMetricSuccess(t *testing.T) {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
 
-	response := executeUpdateMetric(handler, http.MethodPost, "/update/gauge/Alloc/12.5")
+	response := executeRequest(newTestRouter(handler), http.MethodPost, "/update/gauge/Alloc/12.5")
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -57,7 +60,7 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 			name:       "wrong method",
 			method:     http.MethodGet,
 			path:       "/update/gauge/Alloc/12.5",
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:       "short path",
@@ -95,7 +98,7 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 				t.Fatalf("NewMetricsHandler() error = %v", err)
 			}
 
-			response := executeUpdateMetric(handler, tt.method, tt.path)
+			response := executeRequest(newTestRouter(handler), tt.method, tt.path)
 
 			if response.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", response.Code, tt.wantStatus)
@@ -107,21 +110,113 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
-func executeUpdateMetric(handler *MetricsHandler, method, path string) *httptest.ResponseRecorder {
-	request := httptest.NewRequest(method, path, strings.NewReader(""))
+func TestMetricsHandlerGetMetricValueSuccess(t *testing.T) {
+	service := &fakeService{getValue: "12.5"}
+	handler, err := NewMetricsHandler(service)
+	if err != nil {
+		t.Fatalf("NewMetricsHandler() error = %v", err)
+	}
+
+	response := executeRequest(newTestRouter(handler), http.MethodGet, "/value/gauge/Alloc")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "text/plain; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", contentType, "text/plain; charset=utf-8")
+	}
+	if body := response.Body.String(); body != "12.5" {
+		t.Fatalf("body = %q, want 12.5", body)
+	}
+	if service.getMetricType != "gauge" {
+		t.Fatalf("GetMetricValue() metricType = %q, want gauge", service.getMetricType)
+	}
+	if service.getMetricName != "Alloc" {
+		t.Fatalf("GetMetricValue() metricName = %q, want Alloc", service.getMetricName)
+	}
+}
+
+func TestMetricsHandlerGetMetricValueReturnsNotFound(t *testing.T) {
+	service := &fakeService{getErr: errors.New("not found")}
+	handler, err := NewMetricsHandler(service)
+	if err != nil {
+		t.Fatalf("NewMetricsHandler() error = %v", err)
+	}
+
+	response := executeRequest(newTestRouter(handler), http.MethodGet, "/value/gauge/Unknown")
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
+func TestMetricsHandlerListMetrics(t *testing.T) {
+	gaugeValue := 12.5
+	counterValue := int64(3)
+	service := &fakeService{
+		metrics: []models.Metric{
+			{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &gaugeValue,
+			},
+			{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+				Delta: &counterValue,
+			},
+		},
+	}
+	handler, err := NewMetricsHandler(service)
+	if err != nil {
+		t.Fatalf("NewMetricsHandler() error = %v", err)
+	}
+
+	response := executeRequest(newTestRouter(handler), http.MethodGet, "/")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", contentType, "text/html; charset=utf-8")
+	}
+	body := response.Body.String()
+	for _, want := range []string{"Alloc", "12.5", "PollCount", "3"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body does not contain %q: %s", want, body)
+		}
+	}
+}
+
+func newTestRouter(handler *MetricsHandler) http.Handler {
+	router := chi.NewRouter()
+	router.Post("/update/{metricType}/{metricName}/{rawValue}", handler.UpdateMetric)
+	router.Get("/value/{metricType}/{metricName}", handler.GetMetricValue)
+	router.Get("/", handler.ListMetrics)
+
+	return router
+}
+
+func executeRequest(handler http.Handler, method, path string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, path, http.NoBody)
 	response := httptest.NewRecorder()
 
-	handler.UpdateMetric(response, request)
+	handler.ServeHTTP(response, request)
 
 	return response
 }
 
 type fakeService struct {
-	called     bool
-	metricType string
-	metricName string
-	value      string
-	err        error
+	called        bool
+	metricType    string
+	metricName    string
+	value         string
+	err           error
+	getMetricType string
+	getMetricName string
+	getValue      string
+	getErr        error
+	metrics       []models.Metric
 }
 
 func (s *fakeService) UpdateMetric(metricType, metricName, value string) error {
@@ -131,4 +226,15 @@ func (s *fakeService) UpdateMetric(metricType, metricName, value string) error {
 	s.value = value
 
 	return s.err
+}
+
+func (s *fakeService) GetMetricValue(metricType, metricName string) (string, error) {
+	s.getMetricType = metricType
+	s.getMetricName = metricName
+
+	return s.getValue, s.getErr
+}
+
+func (s *fakeService) ListMetrics() []models.Metric {
+	return s.metrics
 }
