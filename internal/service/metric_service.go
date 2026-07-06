@@ -19,26 +19,26 @@ type MetricService struct {
 }
 
 func NewMetricService(storage repository.Storage) (*MetricService, error) {
-	if storage == nil || storage == repository.Storage(nil) {
+	if storage == nil {
 		return nil, ErrInvalidStorage
 	}
 	return &MetricService{storage: storage}, nil
 }
 
-func (m *MetricService) UpdateMetric(metricName, key, value string) error {
-	if metricName == models.MetricTypeGauge {
+func (m *MetricService) UpdateMetric(metricType, metricName, value string) error {
+	if metricType == models.MetricTypeGauge {
 		float, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return err
 		}
-		m.storage.UpdateGauge(key, models.Gauge(float))
+		m.storage.UpdateGauge(metricName, models.Gauge(float))
 		return nil
-	} else if metricName == models.MetricTypeCounter {
+	} else if metricType == models.MetricTypeCounter {
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return err
 		}
-		m.storage.UpdateCounter(key, models.Counter(i))
+		m.storage.UpdateCounter(metricName, models.Counter(i))
 	} else {
 		return ErrUnknownMetricType
 	}

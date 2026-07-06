@@ -51,7 +51,7 @@ var metricsListTemplate = template.Must(template.New("metrics").Parse(`<!DOCTYPE
 </html>`))
 
 func NewMetricsHandler(srv service.Service) (*MetricsHandler, error) {
-	if srv == nil || srv == service.Service(nil) {
+	if srv == nil {
 		return nil, ErrServiceInvalid
 	}
 	return &MetricsHandler{

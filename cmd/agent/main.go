@@ -41,21 +41,21 @@ func main() {
 
 func parseConfig(args []string) (config, error) {
 	var cfg config
-	var pollIntervalSeconds int
-	var reportIntervalSeconds int
+	var pollInterval int
+	var reportInterval int
 
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	flags.StringVar(&cfg.serverAddress, "a", defaultServerAddress, "HTTP server address")
-	flags.IntVar(&reportIntervalSeconds, "r", defaultReportIntervalSeconds, "metrics report interval in seconds")
-	flags.IntVar(&pollIntervalSeconds, "p", defaultPollIntervalSeconds, "metrics poll interval in seconds")
+	flags.IntVar(&reportInterval, "r", defaultReportIntervalSeconds, "metrics report interval in seconds")
+	flags.IntVar(&pollInterval, "p", defaultPollIntervalSeconds, "metrics poll interval in seconds")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
 	}
 
-	cfg.pollInterval = time.Duration(pollIntervalSeconds) * time.Second
-	cfg.reportInterval = time.Duration(reportIntervalSeconds) * time.Second
+	cfg.pollInterval = time.Duration(pollInterval) * time.Second
+	cfg.reportInterval = time.Duration(reportInterval) * time.Second
 
 	return cfg, nil
 }

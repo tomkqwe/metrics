@@ -1,11 +1,14 @@
 package storage
 
 import (
-	models "github.com/tomkqwe/metrics/internal/model"
 	"sort"
+	"sync"
+
+	models "github.com/tomkqwe/metrics/internal/model"
 )
 
 type MemoryStorage struct {
+	mu      sync.RWMutex
 	metrics map[metricKey]models.Metric
 }
 
@@ -21,12 +24,18 @@ func NewMemoryStorage() *MemoryStorage {
 }
 
 func (s *MemoryStorage) Update(metrics []models.Metric) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	for _, metric := range metrics {
 		s.metrics[keyFromMetric(metric)] = cloneMetric(metric)
 	}
 }
 
 func (s *MemoryStorage) Snapshot() []models.Metric {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	keys := make([]metricKey, 0, len(s.metrics))
 	for key := range s.metrics {
 		keys = append(keys, key)

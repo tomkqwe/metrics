@@ -50,14 +50,18 @@ func (a *Agent) ReportOnce() error {
 
 func (a *Agent) Run() {
 	go func() {
-		for {
+		pollTicker := time.NewTicker(a.pollInterval)
+		defer pollTicker.Stop()
+
+		for ; ; <-pollTicker.C {
 			a.PollOnce()
-			time.Sleep(a.pollInterval)
 		}
 	}()
 
-	for {
-		time.Sleep(a.reportInterval)
+	reportTicker := time.NewTicker(a.reportInterval)
+	defer reportTicker.Stop()
+
+	for range reportTicker.C {
 		if err := a.ReportOnce(); err != nil {
 			log.Printf("send metrics: %v", err)
 		}
