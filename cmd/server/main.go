@@ -2,10 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 
+	"github.com/caarlos0/env"
 	"github.com/go-chi/chi/v5"
+
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/repository"
 	"github.com/tomkqwe/metrics/internal/service"
@@ -15,6 +18,10 @@ const defaultServerAddress = "localhost:8080"
 
 type config struct {
 	serverAddress string
+}
+
+type envConfig struct {
+	ServerAddress string `env:"ADDRESS"`
 }
 
 func main() {
@@ -41,6 +48,15 @@ func parseConfig(args []string) (config, error) {
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
+	}
+
+	var eCfg envConfig
+	if err := env.Parse(&eCfg); err != nil {
+		return config{}, fmt.Errorf("failed parse env: %w", err)
+	}
+
+	if _, ok := os.LookupEnv("ADDRESS"); ok {
+		cfg.serverAddress = eCfg.ServerAddress
 	}
 
 	return cfg, nil
