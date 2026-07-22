@@ -1,12 +1,12 @@
 package sender
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 
 	models "github.com/tomkqwe/metrics/internal/model"
@@ -48,16 +48,20 @@ func (s *HTTPSender) Send(metrics []models.Metric) error {
 }
 
 func (s *HTTPSender) sendMetric(metric models.Metric) error {
-	value, err := metricValue(metric)
-	if err != nil {
+	if err := validateMetric(metric); err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.metricURL(metric, value), http.NoBody)
+	var body bytes.Buffer
+	if err := json.NewEncoder(&body).Encode(metric); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, s.metricURL(), &body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -73,29 +77,23 @@ func (s *HTTPSender) sendMetric(metric models.Metric) error {
 	return nil
 }
 
-func (s *HTTPSender) metricURL(metric models.Metric, value string) string {
-	return s.baseURL +
-		"/update/" +
-		url.PathEscape(metric.MType) +
-		"/" +
-		url.PathEscape(metric.ID) +
-		"/" +
-		url.PathEscape(value)
+func (s *HTTPSender) metricURL() string {
+	return s.baseURL + "/update"
 }
 
-func metricValue(metric models.Metric) (string, error) {
+func validateMetric(metric models.Metric) error {
 	switch metric.MType {
 	case models.MetricTypeGauge:
 		if metric.Value == nil {
-			return "", fmt.Errorf("%w: gauge metric %q has nil value", ErrInvalidMetric, metric.ID)
+			return fmt.Errorf("%w: gauge metric %q has nil value", ErrInvalidMetric, metric.ID)
 		}
-		return strconv.FormatFloat(*metric.Value, 'f', -1, 64), nil
+		return nil
 	case models.MetricTypeCounter:
 		if metric.Delta == nil {
-			return "", fmt.Errorf("%w: counter metric %q has nil delta", ErrInvalidMetric, metric.ID)
+			return fmt.Errorf("%w: counter metric %q has nil delta", ErrInvalidMetric, metric.ID)
 		}
-		return strconv.FormatInt(*metric.Delta, 10), nil
+		return nil
 	default:
-		return "", fmt.Errorf("%w: unknown metric type %q", ErrInvalidMetric, metric.MType)
+		return fmt.Errorf("%w: unknown metric type %q", ErrInvalidMetric, metric.MType)
 	}
 }

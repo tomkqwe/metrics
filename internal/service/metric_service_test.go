@@ -214,6 +214,255 @@ func TestMetricServiceListMetrics(t *testing.T) {
 	}
 }
 
+func TestMetricServiceUpdateMetricJson(t *testing.T) {
+	gaugeValue := 12.5
+	counterDelta := int64(3)
+
+	tests := []struct {
+		name        string
+		metric      models.Metric
+		wantGauge   bool
+		wantCounter bool
+	}{
+		{
+			name: "gauge",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &gaugeValue,
+			},
+			wantGauge: true,
+		},
+		{
+			name: "counter",
+			metric: models.Metric{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+				Delta: &counterDelta,
+			},
+			wantCounter: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &fakeStorage{}
+			service, err := NewMetricService(storage)
+			if err != nil {
+				t.Fatalf("NewMetricService() error = %v", err)
+			}
+
+			err = service.UpdateMetricJson(&tt.metric)
+			if err != nil {
+				t.Fatalf("UpdateMetricJson() error = %v", err)
+			}
+
+			if storage.gaugeCalled != tt.wantGauge {
+				t.Fatalf("UpdateGauge() called = %v, want %v", storage.gaugeCalled, tt.wantGauge)
+			}
+			if storage.counterCalled != tt.wantCounter {
+				t.Fatalf("UpdateCounter() called = %v, want %v", storage.counterCalled, tt.wantCounter)
+			}
+			if tt.wantGauge {
+				if storage.gaugeName != tt.metric.ID {
+					t.Fatalf("UpdateGauge() name = %q, want %q", storage.gaugeName, tt.metric.ID)
+				}
+				if storage.gaugeValue != models.Gauge(*tt.metric.Value) {
+					t.Fatalf("UpdateGauge() value = %v, want %v", storage.gaugeValue, models.Gauge(*tt.metric.Value))
+				}
+			}
+			if tt.wantCounter {
+				if storage.counterName != tt.metric.ID {
+					t.Fatalf("UpdateCounter() name = %q, want %q", storage.counterName, tt.metric.ID)
+				}
+				if storage.counterValue != models.Counter(*tt.metric.Delta) {
+					t.Fatalf("UpdateCounter() value = %v, want %v", storage.counterValue, models.Counter(*tt.metric.Delta))
+				}
+			}
+		})
+	}
+}
+
+func TestMetricServiceUpdateMetricJsonReturnsErrorForInvalidMetric(t *testing.T) {
+	tests := []struct {
+		name    string
+		metric  *models.Metric
+		wantErr error
+	}{
+		{
+			name:    "nil metric",
+			wantErr: ErrNilMetric,
+		},
+		{
+			name: "empty name",
+			metric: &models.Metric{
+				MType: models.MetricTypeGauge,
+			},
+			wantErr: ErrInvalidMetricName,
+		},
+		{
+			name: "gauge without value",
+			metric: &models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+			},
+			wantErr: ErrInvalidMetricValue,
+		},
+		{
+			name: "counter without delta",
+			metric: &models.Metric{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+			},
+			wantErr: ErrInvalidMetricValue,
+		},
+		{
+			name: "unknown type",
+			metric: &models.Metric{
+				ID:    "Alloc",
+				MType: "unknown",
+			},
+			wantErr: ErrUnknownMetricType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &fakeStorage{}
+			service, err := NewMetricService(storage)
+			if err != nil {
+				t.Fatalf("NewMetricService() error = %v", err)
+			}
+
+			err = service.UpdateMetricJson(tt.metric)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("UpdateMetricJson() error = %v, want %v", err, tt.wantErr)
+			}
+			if storage.gaugeCalled || storage.counterCalled {
+				t.Fatal("storage update was called for invalid metric")
+			}
+		})
+	}
+}
+
+func TestMetricServiceGetMetricJson(t *testing.T) {
+	storage := &fakeStorage{
+		gauges: map[string]models.Gauge{
+			"Alloc": models.Gauge(12.5),
+		},
+		counters: map[string]models.Counter{
+			"PollCount": models.Counter(3),
+		},
+	}
+	service, err := NewMetricService(storage)
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		metric    models.Metric
+		wantValue *float64
+		wantDelta *int64
+	}{
+		{
+			name: "gauge",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+			},
+			wantValue: ptrFloat64(12.5),
+		},
+		{
+			name: "counter",
+			metric: models.Metric{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+			},
+			wantDelta: ptrInt64(3),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			metric, err := service.GetMetricJson(&tt.metric)
+			if err != nil {
+				t.Fatalf("GetMetricJson() error = %v", err)
+			}
+			if metric.ID != tt.metric.ID {
+				t.Fatalf("GetMetricJson() ID = %q, want %q", metric.ID, tt.metric.ID)
+			}
+			if metric.MType != tt.metric.MType {
+				t.Fatalf("GetMetricJson() MType = %q, want %q", metric.MType, tt.metric.MType)
+			}
+			assertMetricValue(t, metric.Value, tt.wantValue)
+			assertMetricDelta(t, metric.Delta, tt.wantDelta)
+		})
+	}
+}
+
+func TestMetricServiceGetMetricJsonReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		metric  *models.Metric
+		wantErr error
+	}{
+		{
+			name:    "nil metric",
+			wantErr: ErrNilMetric,
+		},
+		{
+			name: "empty name",
+			metric: &models.Metric{
+				MType: models.MetricTypeGauge,
+			},
+			wantErr: ErrInvalidMetricName,
+		},
+		{
+			name: "unknown type",
+			metric: &models.Metric{
+				ID:    "Alloc",
+				MType: "unknown",
+			},
+			wantErr: ErrUnknownMetricType,
+		},
+		{
+			name: "missing gauge",
+			metric: &models.Metric{
+				ID:    "Unknown",
+				MType: models.MetricTypeGauge,
+			},
+			wantErr: ErrMetricNotFound,
+		},
+		{
+			name: "missing counter",
+			metric: &models.Metric{
+				ID:    "Unknown",
+				MType: models.MetricTypeCounter,
+			},
+			wantErr: ErrMetricNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &fakeStorage{
+				gauges:   make(map[string]models.Gauge),
+				counters: make(map[string]models.Counter),
+			}
+			service, err := NewMetricService(storage)
+			if err != nil {
+				t.Fatalf("NewMetricService() error = %v", err)
+			}
+
+			_, err = service.GetMetricJson(tt.metric)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("GetMetricJson() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 type fakeStorage struct {
 	gaugeCalled   bool
 	gaugeName     string
@@ -250,4 +499,40 @@ func (s *fakeStorage) GetCounter(name string) (models.Counter, bool) {
 
 func (s *fakeStorage) Snapshot() []models.Metric {
 	return s.snapshot
+}
+
+func ptrFloat64(value float64) *float64 {
+	return &value
+}
+
+func ptrInt64(value int64) *int64 {
+	return &value
+}
+
+func assertMetricValue(t *testing.T, got, want *float64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("metric Value = %v, want %v", got, want)
+	}
+	if *got != *want {
+		t.Fatalf("metric Value = %v, want %v", *got, *want)
+	}
+}
+
+func assertMetricDelta(t *testing.T, got, want *int64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("metric Delta = %v, want %v", got, want)
+	}
+	if *got != *want {
+		t.Fatalf("metric Delta = %v, want %v", *got, *want)
+	}
 }

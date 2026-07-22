@@ -1,8 +1,8 @@
 package sender
 
 import (
+	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,15 +13,15 @@ import (
 func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	var requests []receivedRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("read request body: %v", err)
+		var metric models.Metric
+		if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
+			t.Fatalf("decode request body: %v", err)
 		}
 		requests = append(requests, receivedRequest{
 			method:      r.Method,
 			path:        r.URL.Path,
 			contentType: r.Header.Get("Content-Type"),
-			body:        string(body),
+			metric:      metric,
 		})
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -50,13 +50,23 @@ func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	expected := []receivedRequest{
 		{
 			method:      http.MethodPost,
-			path:        "/update/gauge/Alloc/12.5",
-			contentType: "text/plain",
+			path:        "/update",
+			contentType: "application/json",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &gaugeValue,
+			},
 		},
 		{
 			method:      http.MethodPost,
-			path:        "/update/counter/PollCount/3",
-			contentType: "text/plain",
+			path:        "/update",
+			contentType: "application/json",
+			metric: models.Metric{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+				Delta: &counterValue,
+			},
 		},
 	}
 	assertRequests(t, requests, expected)
@@ -127,7 +137,7 @@ type receivedRequest struct {
 	method      string
 	path        string
 	contentType string
-	body        string
+	metric      models.Metric
 }
 
 func assertRequests(t *testing.T, got, want []receivedRequest) {
@@ -146,8 +156,41 @@ func assertRequests(t *testing.T, got, want []receivedRequest) {
 		if got[i].contentType != want[i].contentType {
 			t.Fatalf("request %d Content-Type = %q, want %q", i, got[i].contentType, want[i].contentType)
 		}
-		if got[i].body != "" {
-			t.Fatalf("request %d body = %q, want empty body", i, got[i].body)
+		if got[i].metric.ID != want[i].metric.ID {
+			t.Fatalf("request %d metric ID = %q, want %q", i, got[i].metric.ID, want[i].metric.ID)
 		}
+		if got[i].metric.MType != want[i].metric.MType {
+			t.Fatalf("request %d metric MType = %q, want %q", i, got[i].metric.MType, want[i].metric.MType)
+		}
+		assertFloat64Ptr(t, i, got[i].metric.Value, want[i].metric.Value)
+		assertInt64Ptr(t, i, got[i].metric.Delta, want[i].metric.Delta)
+	}
+}
+
+func assertFloat64Ptr(t *testing.T, requestIndex int, got, want *float64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("request %d metric Value = %v, want %v", requestIndex, got, want)
+	}
+	if *got != *want {
+		t.Fatalf("request %d metric Value = %v, want %v", requestIndex, *got, *want)
+	}
+}
+
+func assertInt64Ptr(t *testing.T, requestIndex int, got, want *int64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("request %d metric Delta = %v, want %v", requestIndex, got, want)
+	}
+	if *got != *want {
+		t.Fatalf("request %d metric Delta = %v, want %v", requestIndex, *got, *want)
 	}
 }

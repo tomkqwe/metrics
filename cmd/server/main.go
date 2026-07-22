@@ -88,6 +88,10 @@ func newServerHandler(logger *zap.Logger) (http.Handler, error) {
 	router.Post("/update/{metricType}/{metricName}/{rawValue}", metricsHandler.UpdateMetric)
 	router.Get("/value/{metricType}/{metricName}", metricsHandler.GetMetricValue)
 	router.Get("/", metricsHandler.ListMetrics)
+	router.Post("/update", metricsHandler.UpdateMetricJson)
+	router.Post("/update/", metricsHandler.UpdateMetricJson)
+	router.Post("/value", metricsHandler.GetMetricJson)
+	router.Post("/value/", metricsHandler.GetMetricJson)
 
 	return router, nil
 }
