@@ -8,8 +8,10 @@ import (
 
 	"github.com/caarlos0/env"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 
 	"github.com/tomkqwe/metrics/internal/handler"
+	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
 	"github.com/tomkqwe/metrics/internal/service"
 )
@@ -30,7 +32,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler, err := newServerHandler()
+	logger, err := zap.NewProduction()
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		_ = logger.Sync()
+	}()
+
+	handler, err := newServerHandler(logger)
 	if err != nil {
 		panic(err)
 	}
@@ -62,8 +72,10 @@ func parseConfig(args []string) (config, error) {
 	return cfg, nil
 }
 
-func newServerHandler() (http.Handler, error) {
+func newServerHandler(logger *zap.Logger) (http.Handler, error) {
 	router := chi.NewRouter()
+	router.Use(middleware.WithLogging(logger))
+
 	storage := repository.NewMemStorage()
 	srv, err := service.NewMetricService(storage)
 	if err != nil {
