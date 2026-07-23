@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"strconv"
+	"sync"
 
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/repository"
@@ -18,14 +19,29 @@ var (
 )
 
 type MetricService struct {
-	storage repository.Storage
+	storage      repository.Storage
+	saveOnUpdate func([]models.Metric) error
+	saveMu       sync.Mutex
 }
 
-func NewMetricService(storage repository.Storage) (*MetricService, error) {
+type MetricServiceOption func(*MetricService)
+
+func WithUpdatePersister(save func([]models.Metric) error) MetricServiceOption {
+	return func(service *MetricService) {
+		service.saveOnUpdate = save
+	}
+}
+
+func NewMetricService(storage repository.Storage, options ...MetricServiceOption) (*MetricService, error) {
 	if storage == nil {
 		return nil, ErrInvalidStorage
 	}
-	return &MetricService{storage: storage}, nil
+	service := &MetricService{storage: storage}
+	for _, option := range options {
+		option(service)
+	}
+
+	return service, nil
 }
 
 func (m *MetricService) UpdateMetric(metricType, metricName, value string) error {
@@ -35,19 +51,20 @@ func (m *MetricService) UpdateMetric(metricType, metricName, value string) error
 		if err != nil {
 			return err
 		}
-		m.storage.UpdateGauge(metricName, models.Gauge(float))
-		return nil
+		return m.updateAndPersist(func() {
+			m.storage.UpdateGauge(metricName, models.Gauge(float))
+		})
 	case models.MetricTypeCounter:
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return err
 		}
-		m.storage.UpdateCounter(metricName, models.Counter(i))
+		return m.updateAndPersist(func() {
+			m.storage.UpdateCounter(metricName, models.Counter(i))
+		})
 	default:
 		return ErrUnknownMetricType
 	}
-
-	return nil
 }
 
 func (m *MetricService) GetMetricValue(metricType, metricName string) (string, error) {
@@ -86,14 +103,16 @@ func (m *MetricService) UpdateMetricJson(metric *models.Metric) error {
 		if metric.Value == nil {
 			return ErrInvalidMetricValue
 		}
-		m.storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
-		return nil
+		return m.updateAndPersist(func() {
+			m.storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
+		})
 	case models.MetricTypeCounter:
 		if metric.Delta == nil {
 			return ErrInvalidMetricValue
 		}
-		m.storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
-		return nil
+		return m.updateAndPersist(func() {
+			m.storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
+		})
 	default:
 		return ErrUnknownMetricType
 	}
@@ -125,4 +144,25 @@ func (m *MetricService) GetMetricJson(metric *models.Metric) (models.Metric, err
 	default:
 		return models.Metric{}, ErrUnknownMetricType
 	}
+}
+
+func (m *MetricService) updateAndPersist(update func()) error {
+	if m.saveOnUpdate == nil {
+		update()
+		return nil
+	}
+
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+
+	update()
+	return m.persist()
+}
+
+func (m *MetricService) persist() error {
+	if m.saveOnUpdate == nil {
+		return nil
+	}
+
+	return m.saveOnUpdate(m.storage.Snapshot())
 }

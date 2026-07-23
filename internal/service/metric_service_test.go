@@ -283,6 +283,54 @@ func TestMetricServiceUpdateMetricJson(t *testing.T) {
 	}
 }
 
+func TestMetricServicePersistsAfterSuccessfulUpdate(t *testing.T) {
+	value := 12.5
+	storage := &fakeStorage{
+		snapshot: []models.Metric{
+			{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &value,
+			},
+		},
+	}
+	var savedMetrics []models.Metric
+	service, err := NewMetricService(storage, WithUpdatePersister(func(metrics []models.Metric) error {
+		savedMetrics = metrics
+		return nil
+	}))
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetric(models.MetricTypeGauge, "Alloc", "12.5")
+	if err != nil {
+		t.Fatalf("UpdateMetric() error = %v", err)
+	}
+
+	if len(savedMetrics) != 1 {
+		t.Fatalf("saved metrics len = %d, want 1", len(savedMetrics))
+	}
+	if savedMetrics[0].ID != "Alloc" {
+		t.Fatalf("saved metric ID = %q, want Alloc", savedMetrics[0].ID)
+	}
+}
+
+func TestMetricServiceReturnsPersisterError(t *testing.T) {
+	wantErr := errors.New("save failed")
+	service, err := NewMetricService(&fakeStorage{}, WithUpdatePersister(func(metrics []models.Metric) error {
+		return wantErr
+	}))
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetric(models.MetricTypeCounter, "PollCount", "3")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("UpdateMetric() error = %v, want %v", err, wantErr)
+	}
+}
+
 func TestMetricServiceUpdateMetricJsonReturnsErrorForInvalidMetric(t *testing.T) {
 	tests := []struct {
 		name    string
