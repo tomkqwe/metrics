@@ -83,7 +83,7 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
+	_, _ = fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
 }
 
 func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +107,7 @@ func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, value)
+	_, _ = fmt.Fprint(w, value)
 }
 
 func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,10 @@
 package sender
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,17 +15,31 @@ import (
 func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	var requests []receivedRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Fatalf("create gzip reader: %v", err)
+		}
+		defer func() {
+			_ = reader.Close()
+		}()
+
 		var metric models.Metric
-		if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
+		if err := json.NewDecoder(reader).Decode(&metric); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
 		requests = append(requests, receivedRequest{
-			method:      r.Method,
-			path:        r.URL.Path,
-			contentType: r.Header.Get("Content-Type"),
-			metric:      metric,
+			method:          r.Method,
+			path:            r.URL.Path,
+			contentType:     r.Header.Get("Content-Type"),
+			contentEncoding: r.Header.Get("Content-Encoding"),
+			acceptEncoding:  r.Header.Get("Accept-Encoding"),
+			metric:          metric,
 		})
+		w.Header().Set("Content-Encoding", "gzip")
 		w.WriteHeader(http.StatusOK)
+		gzipWriter := gzip.NewWriter(w)
+		_, _ = io.WriteString(gzipWriter, `{"status":"ok"}`)
+		_ = gzipWriter.Close()
 	}))
 	defer server.Close()
 
@@ -49,9 +65,11 @@ func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 
 	expected := []receivedRequest{
 		{
-			method:      http.MethodPost,
-			path:        "/update",
-			contentType: "application/json",
+			method:          http.MethodPost,
+			path:            "/update",
+			contentType:     "application/json",
+			contentEncoding: "gzip",
+			acceptEncoding:  "gzip",
 			metric: models.Metric{
 				ID:    "Alloc",
 				MType: models.MetricTypeGauge,
@@ -59,9 +77,11 @@ func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 			},
 		},
 		{
-			method:      http.MethodPost,
-			path:        "/update",
-			contentType: "application/json",
+			method:          http.MethodPost,
+			path:            "/update",
+			contentType:     "application/json",
+			contentEncoding: "gzip",
+			acceptEncoding:  "gzip",
 			metric: models.Metric{
 				ID:    "PollCount",
 				MType: models.MetricTypeCounter,
@@ -134,10 +154,12 @@ func TestHTTPSenderSendReturnsErrorForInvalidMetric(t *testing.T) {
 }
 
 type receivedRequest struct {
-	method      string
-	path        string
-	contentType string
-	metric      models.Metric
+	method          string
+	path            string
+	contentType     string
+	contentEncoding string
+	acceptEncoding  string
+	metric          models.Metric
 }
 
 func assertRequests(t *testing.T, got, want []receivedRequest) {
@@ -155,6 +177,12 @@ func assertRequests(t *testing.T, got, want []receivedRequest) {
 		}
 		if got[i].contentType != want[i].contentType {
 			t.Fatalf("request %d Content-Type = %q, want %q", i, got[i].contentType, want[i].contentType)
+		}
+		if got[i].contentEncoding != want[i].contentEncoding {
+			t.Fatalf("request %d Content-Encoding = %q, want %q", i, got[i].contentEncoding, want[i].contentEncoding)
+		}
+		if got[i].acceptEncoding != want[i].acceptEncoding {
+			t.Fatalf("request %d Accept-Encoding = %q, want %q", i, got[i].acceptEncoding, want[i].acceptEncoding)
 		}
 		if got[i].metric.ID != want[i].metric.ID {
 			t.Fatalf("request %d metric ID = %q, want %q", i, got[i].metric.ID, want[i].metric.ID)

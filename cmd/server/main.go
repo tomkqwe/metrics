@@ -75,6 +75,7 @@ func parseConfig(args []string) (config, error) {
 func newServerHandler(logger *zap.Logger) (http.Handler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
+	router.Use(middleware.WithGzip)
 
 	storage := repository.NewMemStorage()
 	srv, err := service.NewMetricService(storage)

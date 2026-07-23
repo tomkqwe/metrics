@@ -2,6 +2,7 @@ package sender
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,22 +53,26 @@ func (s *HTTPSender) sendMetric(metric models.Metric) error {
 		return err
 	}
 
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(metric); err != nil {
+	body, err := compressedBody(metric)
+	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.metricURL(), &body)
+	req, err := http.NewRequest(http.MethodPost, s.metricURL(), body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -79,6 +84,20 @@ func (s *HTTPSender) sendMetric(metric models.Metric) error {
 
 func (s *HTTPSender) metricURL() string {
 	return s.baseURL + "/update"
+}
+
+func compressedBody(metric models.Metric) (*bytes.Buffer, error) {
+	var body bytes.Buffer
+	writer := gzip.NewWriter(&body)
+	if err := json.NewEncoder(writer).Encode(metric); err != nil {
+		_ = writer.Close()
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return &body, nil
 }
 
 func validateMetric(metric models.Metric) error {

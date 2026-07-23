@@ -29,22 +29,24 @@ func NewMetricService(storage repository.Storage) (*MetricService, error) {
 }
 
 func (m *MetricService) UpdateMetric(metricType, metricName, value string) error {
-	if metricType == models.MetricTypeGauge {
+	switch metricType {
+	case models.MetricTypeGauge:
 		float, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return err
 		}
 		m.storage.UpdateGauge(metricName, models.Gauge(float))
 		return nil
-	} else if metricType == models.MetricTypeCounter {
+	case models.MetricTypeCounter:
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return err
 		}
 		m.storage.UpdateCounter(metricName, models.Counter(i))
-	} else {
+	default:
 		return ErrUnknownMetricType
 	}
+
 	return nil
 }
 
