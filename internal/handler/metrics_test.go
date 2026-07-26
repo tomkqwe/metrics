@@ -190,7 +190,7 @@ func TestMetricsHandlerListMetrics(t *testing.T) {
 	}
 }
 
-func TestMetricsHandlerUpdateMetricJsonSuccess(t *testing.T) {
+func TestMetricsHandlerUpdateMetricJSONSuccess(t *testing.T) {
 	value := 1744184459.0
 	service := &fakeService{
 		getJSONResult: models.Metric{
@@ -213,28 +213,28 @@ func TestMetricsHandlerUpdateMetricJsonSuccess(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want %q", contentType, "application/json")
 	}
 	if !service.updateJSONCalled {
-		t.Fatal("UpdateMetricJson() was not called")
+		t.Fatal("UpdateMetricJSON() was not called")
 	}
 	if service.updateJSONMetric.ID != "LastGC" {
-		t.Fatalf("UpdateMetricJson() ID = %q, want LastGC", service.updateJSONMetric.ID)
+		t.Fatalf("UpdateMetricJSON() ID = %q, want LastGC", service.updateJSONMetric.ID)
 	}
 	if service.updateJSONMetric.MType != models.MetricTypeGauge {
-		t.Fatalf("UpdateMetricJson() MType = %q, want %q", service.updateJSONMetric.MType, models.MetricTypeGauge)
+		t.Fatalf("UpdateMetricJSON() MType = %q, want %q", service.updateJSONMetric.MType, models.MetricTypeGauge)
 	}
 	if service.updateJSONMetric.Value == nil {
-		t.Fatal("UpdateMetricJson() Value = nil, want 1744184459")
+		t.Fatal("UpdateMetricJSON() Value = nil, want 1744184459")
 	}
 	if *service.updateJSONMetric.Value != 1744184459 {
-		t.Fatalf("UpdateMetricJson() Value = %v, want 1744184459", *service.updateJSONMetric.Value)
+		t.Fatalf("UpdateMetricJSON() Value = %v, want 1744184459", *service.updateJSONMetric.Value)
 	}
 	if !service.getJSONCalled {
-		t.Fatal("GetMetricJson() was not called")
+		t.Fatal("GetMetricJSON() was not called")
 	}
 	if service.getJSONMetric.ID != "LastGC" {
-		t.Fatalf("GetMetricJson() ID = %q, want LastGC", service.getJSONMetric.ID)
+		t.Fatalf("GetMetricJSON() ID = %q, want LastGC", service.getJSONMetric.ID)
 	}
 	if service.getJSONMetric.MType != models.MetricTypeGauge {
-		t.Fatalf("GetMetricJson() MType = %q, want %q", service.getJSONMetric.MType, models.MetricTypeGauge)
+		t.Fatalf("GetMetricJSON() MType = %q, want %q", service.getJSONMetric.MType, models.MetricTypeGauge)
 	}
 
 	var metric models.Metric
@@ -255,7 +255,7 @@ func TestMetricsHandlerUpdateMetricJsonSuccess(t *testing.T) {
 	}
 }
 
-func TestMetricsHandlerUpdateMetricJsonRejectsInvalidRequests(t *testing.T) {
+func TestMetricsHandlerUpdateMetricJSONRejectsInvalidRequests(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
@@ -288,13 +288,13 @@ func TestMetricsHandlerUpdateMetricJsonRejectsInvalidRequests(t *testing.T) {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
 			}
 			if service.updateJSONCalled != tt.wantCalled {
-				t.Fatalf("UpdateMetricJson() called = %v, want %v", service.updateJSONCalled, tt.wantCalled)
+				t.Fatalf("UpdateMetricJSON() called = %v, want %v", service.updateJSONCalled, tt.wantCalled)
 			}
 		})
 	}
 }
 
-func TestMetricsHandlerGetMetricJsonSuccess(t *testing.T) {
+func TestMetricsHandlerGetMetricJSONSuccess(t *testing.T) {
 	value := 1744184459.0
 	service := &fakeService{
 		getJSONResult: models.Metric{
@@ -317,13 +317,13 @@ func TestMetricsHandlerGetMetricJsonSuccess(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want %q", contentType, "application/json")
 	}
 	if !service.getJSONCalled {
-		t.Fatal("GetMetricJson() was not called")
+		t.Fatal("GetMetricJSON() was not called")
 	}
 	if service.getJSONMetric.ID != "LastGC" {
-		t.Fatalf("GetMetricJson() ID = %q, want LastGC", service.getJSONMetric.ID)
+		t.Fatalf("GetMetricJSON() ID = %q, want LastGC", service.getJSONMetric.ID)
 	}
 	if service.getJSONMetric.MType != models.MetricTypeGauge {
-		t.Fatalf("GetMetricJson() MType = %q, want %q", service.getJSONMetric.MType, models.MetricTypeGauge)
+		t.Fatalf("GetMetricJSON() MType = %q, want %q", service.getJSONMetric.MType, models.MetricTypeGauge)
 	}
 
 	var metric models.Metric
@@ -344,7 +344,7 @@ func TestMetricsHandlerGetMetricJsonSuccess(t *testing.T) {
 	}
 }
 
-func TestMetricsHandlerGetMetricJsonRejectsInvalidRequests(t *testing.T) {
+func TestMetricsHandlerGetMetricJSONRejectsInvalidRequests(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
@@ -387,7 +387,7 @@ func TestMetricsHandlerGetMetricJsonRejectsInvalidRequests(t *testing.T) {
 				t.Fatalf("status = %d, want %d", response.Code, tt.wantStatus)
 			}
 			if service.getJSONCalled != tt.wantCalled {
-				t.Fatalf("GetMetricJson() called = %v, want %v", service.getJSONCalled, tt.wantCalled)
+				t.Fatalf("GetMetricJSON() called = %v, want %v", service.getJSONCalled, tt.wantCalled)
 			}
 		})
 	}
@@ -398,8 +398,8 @@ func newTestRouter(handler *MetricsHandler) http.Handler {
 	router.Post("/update/{metricType}/{metricName}/{rawValue}", handler.UpdateMetric)
 	router.Get("/value/{metricType}/{metricName}", handler.GetMetricValue)
 	router.Get("/", handler.ListMetrics)
-	router.Post("/update/", handler.UpdateMetricJson)
-	router.Post("/value/", handler.GetMetricJson)
+	router.Post("/update/", handler.UpdateMetricJSON)
+	router.Post("/value/", handler.GetMetricJSON)
 
 	return router
 }
@@ -462,7 +462,7 @@ func (s *fakeService) ListMetrics() []models.Metric {
 	return s.metrics
 }
 
-func (s *fakeService) UpdateMetricJson(metric *models.Metric) error {
+func (s *fakeService) UpdateMetricJSON(metric *models.Metric) error {
 	s.updateJSONCalled = true
 	if metric != nil {
 		s.updateJSONMetric = *metric
@@ -471,7 +471,7 @@ func (s *fakeService) UpdateMetricJson(metric *models.Metric) error {
 	return s.updateJSONErr
 }
 
-func (s *fakeService) GetMetricJson(metric *models.Metric) (models.Metric, error) {
+func (s *fakeService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {
 	s.getJSONCalled = true
 	if metric != nil {
 		s.getJSONMetric = *metric

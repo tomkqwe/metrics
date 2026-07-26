@@ -18,17 +18,17 @@ func TestParseConfigUsesDefaults(t *testing.T) {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
 
-	if cfg.serverAddress != defaultServerAddress {
-		t.Fatalf("serverAddress = %q, want %q", cfg.serverAddress, defaultServerAddress)
+	if cfg.ServerAddress != defaultServerAddress {
+		t.Fatalf("ServerAddress = %q, want %q", cfg.ServerAddress, defaultServerAddress)
 	}
-	if cfg.storeInterval != defaultStoreIntervalSeconds*time.Second {
-		t.Fatalf("storeInterval = %v, want %v", cfg.storeInterval, defaultStoreIntervalSeconds*time.Second)
+	if cfg.StoreInterval != defaultStoreIntervalSeconds*time.Second {
+		t.Fatalf("StoreInterval = %v, want %v", cfg.StoreInterval, defaultStoreIntervalSeconds*time.Second)
 	}
-	if cfg.fileStoragePath != defaultFileStoragePath {
-		t.Fatalf("fileStoragePath = %q, want %q", cfg.fileStoragePath, defaultFileStoragePath)
+	if cfg.FileStoragePath != defaultFileStoragePath {
+		t.Fatalf("FileStoragePath = %q, want %q", cfg.FileStoragePath, defaultFileStoragePath)
 	}
-	if cfg.restore != defaultRestore {
-		t.Fatalf("restore = %v, want %v", cfg.restore, defaultRestore)
+	if cfg.Restore != defaultRestore {
+		t.Fatalf("Restore = %v, want %v", cfg.Restore, defaultRestore)
 	}
 }
 
@@ -45,17 +45,17 @@ func TestParseConfigUsesFlags(t *testing.T) {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
 
-	if cfg.serverAddress != "localhost:9090" {
-		t.Fatalf("serverAddress = %q, want localhost:9090", cfg.serverAddress)
+	if cfg.ServerAddress != "localhost:9090" {
+		t.Fatalf("ServerAddress = %q, want localhost:9090", cfg.ServerAddress)
 	}
-	if cfg.storeInterval != 10*time.Second {
-		t.Fatalf("storeInterval = %v, want 10s", cfg.storeInterval)
+	if cfg.StoreInterval != 10*time.Second {
+		t.Fatalf("StoreInterval = %v, want 10s", cfg.StoreInterval)
 	}
-	if cfg.fileStoragePath != "/tmp/custom-metrics.json" {
-		t.Fatalf("fileStoragePath = %q, want /tmp/custom-metrics.json", cfg.fileStoragePath)
+	if cfg.FileStoragePath != "/tmp/custom-metrics.json" {
+		t.Fatalf("FileStoragePath = %q, want /tmp/custom-metrics.json", cfg.FileStoragePath)
 	}
-	if cfg.restore {
-		t.Fatal("restore = true, want false")
+	if cfg.Restore {
+		t.Fatal("Restore = true, want false")
 	}
 }
 
@@ -76,17 +76,17 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 		t.Fatalf("parseConfig() error = %v", err)
 	}
 
-	if cfg.serverAddress != "localhost:7070" {
-		t.Fatalf("serverAddress = %q, want localhost:7070", cfg.serverAddress)
+	if cfg.ServerAddress != "localhost:7070" {
+		t.Fatalf("ServerAddress = %q, want localhost:7070", cfg.ServerAddress)
 	}
-	if cfg.storeInterval != 0 {
-		t.Fatalf("storeInterval = %v, want 0", cfg.storeInterval)
+	if cfg.StoreInterval != 0 {
+		t.Fatalf("StoreInterval = %v, want 0", cfg.StoreInterval)
 	}
-	if cfg.fileStoragePath != "/tmp/env-metrics.json" {
-		t.Fatalf("fileStoragePath = %q, want /tmp/env-metrics.json", cfg.fileStoragePath)
+	if cfg.FileStoragePath != "/tmp/env-metrics.json" {
+		t.Fatalf("FileStoragePath = %q, want /tmp/env-metrics.json", cfg.FileStoragePath)
 	}
-	if cfg.restore {
-		t.Fatal("restore = true, want false")
+	if cfg.Restore {
+		t.Fatal("Restore = true, want false")
 	}
 }
 
@@ -111,8 +111,8 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 	}
 
 	storage, restoredFileStorage, err := newServerStorage(config{
-		fileStoragePath: path,
-		restore:         true,
+		FileStoragePath: path,
+		Restore:         true,
 	})
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
@@ -144,8 +144,8 @@ func TestNewServerStorageSkipsRestore(t *testing.T) {
 	}
 
 	storage, _, err := newServerStorage(config{
-		fileStoragePath: path,
-		restore:         false,
+		FileStoragePath: path,
+		Restore:         false,
 	})
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)

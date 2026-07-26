@@ -6,6 +6,6 @@ type Service interface {
 	UpdateMetric(metricType, metricName, value string) error
 	GetMetricValue(metricType, metricName string) (string, error)
 	ListMetrics() []models.Metric
-	UpdateMetricJson(metric *models.Metric) error
-	GetMetricJson(metric *models.Metric) (models.Metric, error)
+	UpdateMetricJSON(metric *models.Metric) error
+	GetMetricJSON(metric *models.Metric) (models.Metric, error)
 }

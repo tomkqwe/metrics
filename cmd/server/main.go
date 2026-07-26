@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/caarlos0/env"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
-	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/repository"
 	"github.com/tomkqwe/metrics/internal/service"
 )
@@ -27,17 +28,10 @@ const (
 )
 
 type config struct {
-	serverAddress   string
-	storeInterval   time.Duration
-	fileStoragePath string
-	restore         bool
-}
-
-type envConfig struct {
-	ServerAddress   string `env:"ADDRESS"`
-	StoreInterval   int    `env:"STORE_INTERVAL"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH"`
-	Restore         bool   `env:"RESTORE"`
+	ServerAddress   string        `env:"ADDRESS"`
+	StoreInterval   time.Duration `env:"STORE_INTERVAL"`
+	FileStoragePath string        `env:"FILE_STORAGE_PATH"`
+	Restore         bool          `env:"RESTORE"`
 }
 
 func main() {
@@ -60,7 +54,7 @@ func main() {
 	}
 
 	serviceOptions := make([]service.MetricServiceOption, 0, 1)
-	if cfg.storeInterval == 0 && fileStorage != nil {
+	if cfg.StoreInterval == 0 && fileStorage != nil {
 		serviceOptions = append(serviceOptions, service.WithUpdatePersister(fileStorage.Save))
 	}
 
@@ -71,60 +65,82 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	startPeriodicSave(ctx, cfg.storeInterval, storage, fileStorage, logger)
+	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
 
 	handler, err := newServerHandler(logger, metricService)
 	if err != nil {
 		panic(err)
 	}
-	if err := http.ListenAndServe(cfg.serverAddress, handler); err != nil {
+	if err := http.ListenAndServe(cfg.ServerAddress, handler); err != nil {
 		panic(err)
 	}
 }
 
 func parseConfig(args []string) (config, error) {
-	var cfg config
-
-	var storeInterval int
+	cfg := config{
+		ServerAddress:   defaultServerAddress,
+		StoreInterval:   defaultStoreIntervalSeconds * time.Second,
+		FileStoragePath: defaultFileStoragePath,
+		Restore:         defaultRestore,
+	}
 
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	flags.StringVar(&cfg.serverAddress, "a", defaultServerAddress, "HTTP server address")
-	flags.IntVar(&storeInterval, "i", defaultStoreIntervalSeconds, "metrics store interval in seconds")
-	flags.StringVar(&cfg.fileStoragePath, "f", defaultFileStoragePath, "metrics storage file path")
-	flags.BoolVar(&cfg.restore, "r", defaultRestore, "restore metrics from storage file")
+	flags.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
+	flags.Var(secondsDurationFlag{value: &cfg.StoreInterval}, "i", "metrics store interval in seconds")
+	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
+	flags.BoolVar(&cfg.Restore, "r", cfg.Restore, "restore metrics from storage file")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
 	}
-	cfg.storeInterval = time.Duration(storeInterval) * time.Second
 
-	var eCfg envConfig
-	if err := env.Parse(&eCfg); err != nil {
+	if err := env.ParseWithFuncs(&cfg, env.CustomParsers{
+		reflect.TypeOf(time.Duration(0)): parseDurationSecondsEnv,
+	}); err != nil {
 		return config{}, fmt.Errorf("failed parse env: %w", err)
 	}
 
-	if _, ok := os.LookupEnv("ADDRESS"); ok {
-		cfg.serverAddress = eCfg.ServerAddress
-	}
-
-	if _, ok := os.LookupEnv("STORE_INTERVAL"); ok {
-		cfg.storeInterval = time.Duration(eCfg.StoreInterval) * time.Second
-	}
-
-	if _, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
-		cfg.fileStoragePath = eCfg.FileStoragePath
-	}
-
-	if _, ok := os.LookupEnv("RESTORE"); ok {
-		cfg.restore = eCfg.Restore
-	}
-
-	if cfg.storeInterval < 0 {
+	if cfg.StoreInterval < 0 {
 		return config{}, fmt.Errorf("store interval must be non-negative")
 	}
 
 	return cfg, nil
+}
+
+type secondsDurationFlag struct {
+	value *time.Duration
+}
+
+func (f secondsDurationFlag) String() string {
+	if f.value == nil {
+		return ""
+	}
+
+	return strconv.FormatInt(int64(*f.value/time.Second), 10)
+}
+
+func (f secondsDurationFlag) Set(value string) error {
+	duration, err := parseDurationSeconds(value)
+	if err != nil {
+		return err
+	}
+
+	*f.value = duration
+	return nil
+}
+
+func parseDurationSecondsEnv(value string) (interface{}, error) {
+	return parseDurationSeconds(value)
+}
+
+func parseDurationSeconds(value string) (time.Duration, error) {
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func newServerHandler(logger *zap.Logger, srv service.Service) (http.Handler, error) {
@@ -139,54 +155,32 @@ func newServerHandler(logger *zap.Logger, srv service.Service) (http.Handler, er
 	router.Post("/update/{metricType}/{metricName}/{rawValue}", metricsHandler.UpdateMetric)
 	router.Get("/value/{metricType}/{metricName}", metricsHandler.GetMetricValue)
 	router.Get("/", metricsHandler.ListMetrics)
-	router.Post("/update", metricsHandler.UpdateMetricJson)
-	router.Post("/update/", metricsHandler.UpdateMetricJson)
-	router.Post("/value", metricsHandler.GetMetricJson)
-	router.Post("/value/", metricsHandler.GetMetricJson)
+	router.Post("/update", metricsHandler.UpdateMetricJSON)
+	router.Post("/update/", metricsHandler.UpdateMetricJSON)
+	router.Post("/value", metricsHandler.GetMetricJSON)
+	router.Post("/value/", metricsHandler.GetMetricJSON)
 
 	return router, nil
 }
 
 func newServerStorage(cfg config) (repository.Storage, *repository.FileStorage, error) {
 	storage := repository.NewMemStorage()
-	if cfg.fileStoragePath == "" {
+	if cfg.FileStoragePath == "" {
 		return storage, nil, nil
 	}
 
-	fileStorage := repository.NewFileStorage(cfg.fileStoragePath)
-	if cfg.restore {
-		if err := restoreMetrics(storage, fileStorage); err != nil {
+	fileStorage := repository.NewFileStorage(cfg.FileStoragePath)
+	if cfg.Restore {
+		metrics, err := fileStorage.Load()
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := repository.RestoreMetrics(storage, metrics); err != nil {
 			return nil, nil, err
 		}
 	}
 
 	return storage, fileStorage, nil
-}
-
-func restoreMetrics(storage repository.Storage, fileStorage *repository.FileStorage) error {
-	metrics, err := fileStorage.Load()
-	if err != nil {
-		return err
-	}
-
-	for _, metric := range metrics {
-		switch metric.MType {
-		case models.MetricTypeGauge:
-			if metric.Value == nil {
-				return fmt.Errorf("restore gauge %q: missing value", metric.ID)
-			}
-			storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
-		case models.MetricTypeCounter:
-			if metric.Delta == nil {
-				return fmt.Errorf("restore counter %q: missing delta", metric.ID)
-			}
-			storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
-		default:
-			return fmt.Errorf("restore metric %q: unknown type %q", metric.ID, metric.MType)
-		}
-	}
-
-	return nil
 }
 
 func startPeriodicSave(

@@ -90,7 +90,7 @@ func (m *MetricService) ListMetrics() []models.Metric {
 	return m.storage.Snapshot()
 }
 
-func (m *MetricService) UpdateMetricJson(metric *models.Metric) error {
+func (m *MetricService) UpdateMetricJSON(metric *models.Metric) error {
 	if metric == nil {
 		return ErrNilMetric
 	}
@@ -118,7 +118,7 @@ func (m *MetricService) UpdateMetricJson(metric *models.Metric) error {
 	}
 }
 
-func (m *MetricService) GetMetricJson(metric *models.Metric) (models.Metric, error) {
+func (m *MetricService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {
 	if metric == nil {
 		return models.Metric{}, ErrNilMetric
 	}
@@ -156,13 +156,5 @@ func (m *MetricService) updateAndPersist(update func()) error {
 	defer m.saveMu.Unlock()
 
 	update()
-	return m.persist()
-}
-
-func (m *MetricService) persist() error {
-	if m.saveOnUpdate == nil {
-		return nil
-	}
-
 	return m.saveOnUpdate(m.storage.Snapshot())
 }

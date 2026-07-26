@@ -123,7 +123,7 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *MetricsHandler) UpdateMetricJson(w http.ResponseWriter, r *http.Request) {
+func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	w.Header().Set("Content-Type", "application/json")
 	var reqBody models.Metric
@@ -131,12 +131,12 @@ func (m *MetricsHandler) UpdateMetricJson(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if err := m.service.UpdateMetricJson(&reqBody); err != nil {
+	if err := m.service.UpdateMetricJSON(&reqBody); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	metric, err := m.service.GetMetricJson(&reqBody)
+	metric, err := m.service.GetMetricJSON(&reqBody)
 	if err != nil {
 		if errors.Is(err, service.ErrMetricNotFound) {
 			w.WriteHeader(http.StatusNotFound)
@@ -152,14 +152,14 @@ func (m *MetricsHandler) UpdateMetricJson(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (m *MetricsHandler) GetMetricJson(w http.ResponseWriter, r *http.Request) {
+func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var reqBody models.Metric
 	if err := decoder.Decode(&reqBody); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	metric, err := m.service.GetMetricJson(&reqBody)
+	metric, err := m.service.GetMetricJSON(&reqBody)
 	if err != nil {
 		if errors.Is(err, service.ErrMetricNotFound) {
 			w.WriteHeader(http.StatusNotFound)
@@ -171,7 +171,7 @@ func (m *MetricsHandler) GetMetricJson(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
 		log.Printf("encode response: %v", err)
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }

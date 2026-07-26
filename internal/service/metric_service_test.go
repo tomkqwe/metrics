@@ -214,7 +214,7 @@ func TestMetricServiceListMetrics(t *testing.T) {
 	}
 }
 
-func TestMetricServiceUpdateMetricJson(t *testing.T) {
+func TestMetricServiceUpdateMetricJSON(t *testing.T) {
 	gaugeValue := 12.5
 	counterDelta := int64(3)
 
@@ -252,9 +252,9 @@ func TestMetricServiceUpdateMetricJson(t *testing.T) {
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetricJson(&tt.metric)
+			err = service.UpdateMetricJSON(&tt.metric)
 			if err != nil {
-				t.Fatalf("UpdateMetricJson() error = %v", err)
+				t.Fatalf("UpdateMetricJSON() error = %v", err)
 			}
 
 			if storage.gaugeCalled != tt.wantGauge {
@@ -331,7 +331,7 @@ func TestMetricServiceReturnsPersisterError(t *testing.T) {
 	}
 }
 
-func TestMetricServiceUpdateMetricJsonReturnsErrorForInvalidMetric(t *testing.T) {
+func TestMetricServiceUpdateMetricJSONReturnsErrorForInvalidMetric(t *testing.T) {
 	tests := []struct {
 		name    string
 		metric  *models.Metric
@@ -382,9 +382,9 @@ func TestMetricServiceUpdateMetricJsonReturnsErrorForInvalidMetric(t *testing.T)
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetricJson(tt.metric)
+			err = service.UpdateMetricJSON(tt.metric)
 			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("UpdateMetricJson() error = %v, want %v", err, tt.wantErr)
+				t.Fatalf("UpdateMetricJSON() error = %v, want %v", err, tt.wantErr)
 			}
 			if storage.gaugeCalled || storage.counterCalled {
 				t.Fatal("storage update was called for invalid metric")
@@ -393,7 +393,7 @@ func TestMetricServiceUpdateMetricJsonReturnsErrorForInvalidMetric(t *testing.T)
 	}
 }
 
-func TestMetricServiceGetMetricJson(t *testing.T) {
+func TestMetricServiceGetMetricJSON(t *testing.T) {
 	storage := &fakeStorage{
 		gauges: map[string]models.Gauge{
 			"Alloc": models.Gauge(12.5),
@@ -433,15 +433,15 @@ func TestMetricServiceGetMetricJson(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			metric, err := service.GetMetricJson(&tt.metric)
+			metric, err := service.GetMetricJSON(&tt.metric)
 			if err != nil {
-				t.Fatalf("GetMetricJson() error = %v", err)
+				t.Fatalf("GetMetricJSON() error = %v", err)
 			}
 			if metric.ID != tt.metric.ID {
-				t.Fatalf("GetMetricJson() ID = %q, want %q", metric.ID, tt.metric.ID)
+				t.Fatalf("GetMetricJSON() ID = %q, want %q", metric.ID, tt.metric.ID)
 			}
 			if metric.MType != tt.metric.MType {
-				t.Fatalf("GetMetricJson() MType = %q, want %q", metric.MType, tt.metric.MType)
+				t.Fatalf("GetMetricJSON() MType = %q, want %q", metric.MType, tt.metric.MType)
 			}
 			assertMetricValue(t, metric.Value, tt.wantValue)
 			assertMetricDelta(t, metric.Delta, tt.wantDelta)
@@ -449,7 +449,7 @@ func TestMetricServiceGetMetricJson(t *testing.T) {
 	}
 }
 
-func TestMetricServiceGetMetricJsonReturnsError(t *testing.T) {
+func TestMetricServiceGetMetricJSONReturnsError(t *testing.T) {
 	tests := []struct {
 		name    string
 		metric  *models.Metric
@@ -503,9 +503,9 @@ func TestMetricServiceGetMetricJsonReturnsError(t *testing.T) {
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			_, err = service.GetMetricJson(tt.metric)
+			_, err = service.GetMetricJSON(tt.metric)
 			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("GetMetricJson() error = %v, want %v", err, tt.wantErr)
+				t.Fatalf("GetMetricJSON() error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}

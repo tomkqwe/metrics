@@ -1,12 +1,18 @@
 package middleware
 
 import (
+	"bufio"
 	"compress/gzip"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"strings"
 )
+
+var _ io.Closer = (*gzipResponseWriter)(nil)
+var _ http.Flusher = (*gzipResponseWriter)(nil)
+var _ http.Hijacker = (*gzipResponseWriter)(nil)
 
 const gzipEncoding = "gzip"
 
@@ -52,6 +58,29 @@ func (w *gzipResponseWriter) Write(data []byte) (int, error) {
 	}
 
 	return w.ResponseWriter.Write(data)
+}
+
+func (w *gzipResponseWriter) Flush() {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	if w.compressing && w.writer != nil {
+		_ = w.writer.Flush()
+	}
+
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+
+	return hijacker.Hijack()
 }
 
 func (w *gzipResponseWriter) Close() error {
@@ -117,5 +146,3 @@ func hasEncoding(headerValue, encoding string) bool {
 
 	return false
 }
-
-var _ io.Closer = (*gzipResponseWriter)(nil)

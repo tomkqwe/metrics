@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -152,6 +154,50 @@ func TestWithGzipDoesNotCompressUnsupportedResponseContentType(t *testing.T) {
 	}
 }
 
+func TestWithGzipFlushesCompressedResponse(t *testing.T) {
+	handler := WithGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("ResponseWriter does not implement http.Flusher")
+		}
+
+		_, _ = io.WriteString(w, "first")
+		flusher.Flush()
+		_, _ = io.WriteString(w, "second")
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	request.Header.Set("Accept-Encoding", "gzip")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if !response.Flushed {
+		t.Fatal("underlying ResponseWriter was not flushed")
+	}
+	if body := decompressedString(t, response.Body); body != "firstsecond" {
+		t.Fatalf("body = %q, want firstsecond", body)
+	}
+}
+
+func TestGzipResponseWriterHijackDelegatesToWrappedWriter(t *testing.T) {
+	response := &hijackableResponseWriter{
+		ResponseWriter: httptest.NewRecorder(),
+	}
+	writer := &gzipResponseWriter{
+		ResponseWriter: response,
+	}
+
+	_, _, err := writer.Hijack()
+	if err != nil {
+		t.Fatalf("Hijack() error = %v", err)
+	}
+	if !response.hijacked {
+		t.Fatal("wrapped ResponseWriter was not hijacked")
+	}
+}
+
 func assertStringField(t *testing.T, fields []zapcore.Field, key, want string) {
 	t.Helper()
 
@@ -227,4 +273,14 @@ func decompressedString(t *testing.T, body io.Reader) string {
 	}
 
 	return string(value)
+}
+
+type hijackableResponseWriter struct {
+	http.ResponseWriter
+	hijacked bool
+}
+
+func (w *hijackableResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	w.hijacked = true
+	return nil, nil, nil
 }
