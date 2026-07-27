@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/caarlos0/env"
 	"github.com/tomkqwe/metrics/internal/agent"
 	"github.com/tomkqwe/metrics/internal/agent/collector"
 	"github.com/tomkqwe/metrics/internal/agent/sender"
@@ -25,6 +27,12 @@ type config struct {
 	reportInterval time.Duration
 }
 
+type envConfig struct {
+	ServerAddress  string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
+}
+
 func main() {
 	cfg, err := parseConfig(os.Args[1:])
 	if err != nil {
@@ -41,6 +49,7 @@ func main() {
 
 func parseConfig(args []string) (config, error) {
 	var cfg config
+
 	var pollInterval int
 	var reportInterval int
 
@@ -56,6 +65,23 @@ func parseConfig(args []string) (config, error) {
 
 	cfg.pollInterval = time.Duration(pollInterval) * time.Second
 	cfg.reportInterval = time.Duration(reportInterval) * time.Second
+
+	var eCfg envConfig
+	if err := env.Parse(&eCfg); err != nil {
+		return config{}, fmt.Errorf("parse env config failed: %w", err)
+	}
+
+	if _, ok := os.LookupEnv("ADDRESS"); ok {
+		cfg.serverAddress = eCfg.ServerAddress
+	}
+
+	if _, ok := os.LookupEnv("POLL_INTERVAL"); ok {
+		cfg.pollInterval = time.Duration(eCfg.PollInterval) * time.Second
+	}
+
+	if _, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
+		cfg.reportInterval = time.Duration(eCfg.ReportInterval) * time.Second
+	}
 
 	return cfg, nil
 }

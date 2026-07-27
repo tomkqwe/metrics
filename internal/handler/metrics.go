@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -82,7 +83,7 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
+	_, _ = fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
 }
 
 func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +107,7 @@ func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, value)
+	_, _ = fmt.Fprint(w, value)
 }
 
 func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +120,59 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	err := metricsListTemplate.Execute(w, metricsForView(m.service.ListMetrics()))
 	if err != nil {
 		log.Printf("render metrics list: %v", err)
+	}
+}
+
+func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	w.Header().Set("Content-Type", "application/json")
+	var reqBody models.Metric
+	if err := decoder.Decode(&reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if err := m.service.UpdateMetricJSON(&reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	metric, err := m.service.GetMetricJSON(&reqBody)
+	if err != nil {
+		if errors.Is(err, service.ErrMetricNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if err = json.NewEncoder(w).Encode(metric); err != nil {
+		log.Printf("encode response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	var reqBody models.Metric
+	if err := decoder.Decode(&reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	metric, err := m.service.GetMetricJSON(&reqBody)
+	if err != nil {
+		if errors.Is(err, service.ErrMetricNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(metric); err != nil {
+		log.Printf("encode response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 

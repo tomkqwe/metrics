@@ -1,12 +1,13 @@
 package sender
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 
 	models "github.com/tomkqwe/metrics/internal/model"
@@ -48,22 +49,30 @@ func (s *HTTPSender) Send(metrics []models.Metric) error {
 }
 
 func (s *HTTPSender) sendMetric(metric models.Metric) error {
-	value, err := metricValue(metric)
+	if err := validateMetric(metric); err != nil {
+		return err
+	}
+
+	body, err := compressedBody(metric)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.metricURL(metric, value), http.NoBody)
+	req, err := http.NewRequest(http.MethodPost, s.metricURL(), body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -73,29 +82,37 @@ func (s *HTTPSender) sendMetric(metric models.Metric) error {
 	return nil
 }
 
-func (s *HTTPSender) metricURL(metric models.Metric, value string) string {
-	return s.baseURL +
-		"/update/" +
-		url.PathEscape(metric.MType) +
-		"/" +
-		url.PathEscape(metric.ID) +
-		"/" +
-		url.PathEscape(value)
+func (s *HTTPSender) metricURL() string {
+	return s.baseURL + "/update"
 }
 
-func metricValue(metric models.Metric) (string, error) {
+func compressedBody(metric models.Metric) (*bytes.Buffer, error) {
+	var body bytes.Buffer
+	writer := gzip.NewWriter(&body)
+	if err := json.NewEncoder(writer).Encode(metric); err != nil {
+		_ = writer.Close()
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return &body, nil
+}
+
+func validateMetric(metric models.Metric) error {
 	switch metric.MType {
 	case models.MetricTypeGauge:
 		if metric.Value == nil {
-			return "", fmt.Errorf("%w: gauge metric %q has nil value", ErrInvalidMetric, metric.ID)
+			return fmt.Errorf("%w: gauge metric %q has nil value", ErrInvalidMetric, metric.ID)
 		}
-		return strconv.FormatFloat(*metric.Value, 'f', -1, 64), nil
+		return nil
 	case models.MetricTypeCounter:
 		if metric.Delta == nil {
-			return "", fmt.Errorf("%w: counter metric %q has nil delta", ErrInvalidMetric, metric.ID)
+			return fmt.Errorf("%w: counter metric %q has nil delta", ErrInvalidMetric, metric.ID)
 		}
-		return strconv.FormatInt(*metric.Delta, 10), nil
+		return nil
 	default:
-		return "", fmt.Errorf("%w: unknown metric type %q", ErrInvalidMetric, metric.MType)
+		return fmt.Errorf("%w: unknown metric type %q", ErrInvalidMetric, metric.MType)
 	}
 }

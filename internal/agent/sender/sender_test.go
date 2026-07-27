@@ -1,6 +1,8 @@
 package sender
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,17 +15,31 @@ import (
 func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	var requests []receivedRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
+		reader, err := gzip.NewReader(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Fatalf("create gzip reader: %v", err)
+		}
+		defer func() {
+			_ = reader.Close()
+		}()
+
+		var metric models.Metric
+		if err := json.NewDecoder(reader).Decode(&metric); err != nil {
+			t.Fatalf("decode request body: %v", err)
 		}
 		requests = append(requests, receivedRequest{
-			method:      r.Method,
-			path:        r.URL.Path,
-			contentType: r.Header.Get("Content-Type"),
-			body:        string(body),
+			method:          r.Method,
+			path:            r.URL.Path,
+			contentType:     r.Header.Get("Content-Type"),
+			contentEncoding: r.Header.Get("Content-Encoding"),
+			acceptEncoding:  r.Header.Get("Accept-Encoding"),
+			metric:          metric,
 		})
+		w.Header().Set("Content-Encoding", "gzip")
 		w.WriteHeader(http.StatusOK)
+		gzipWriter := gzip.NewWriter(w)
+		_, _ = io.WriteString(gzipWriter, `{"status":"ok"}`)
+		_ = gzipWriter.Close()
 	}))
 	defer server.Close()
 
@@ -49,14 +65,28 @@ func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 
 	expected := []receivedRequest{
 		{
-			method:      http.MethodPost,
-			path:        "/update/gauge/Alloc/12.5",
-			contentType: "text/plain",
+			method:          http.MethodPost,
+			path:            "/update",
+			contentType:     "application/json",
+			contentEncoding: "gzip",
+			acceptEncoding:  "gzip",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &gaugeValue,
+			},
 		},
 		{
-			method:      http.MethodPost,
-			path:        "/update/counter/PollCount/3",
-			contentType: "text/plain",
+			method:          http.MethodPost,
+			path:            "/update",
+			contentType:     "application/json",
+			contentEncoding: "gzip",
+			acceptEncoding:  "gzip",
+			metric: models.Metric{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+				Delta: &counterValue,
+			},
 		},
 	}
 	assertRequests(t, requests, expected)
@@ -124,10 +154,12 @@ func TestHTTPSenderSendReturnsErrorForInvalidMetric(t *testing.T) {
 }
 
 type receivedRequest struct {
-	method      string
-	path        string
-	contentType string
-	body        string
+	method          string
+	path            string
+	contentType     string
+	contentEncoding string
+	acceptEncoding  string
+	metric          models.Metric
 }
 
 func assertRequests(t *testing.T, got, want []receivedRequest) {
@@ -146,8 +178,47 @@ func assertRequests(t *testing.T, got, want []receivedRequest) {
 		if got[i].contentType != want[i].contentType {
 			t.Fatalf("request %d Content-Type = %q, want %q", i, got[i].contentType, want[i].contentType)
 		}
-		if got[i].body != "" {
-			t.Fatalf("request %d body = %q, want empty body", i, got[i].body)
+		if got[i].contentEncoding != want[i].contentEncoding {
+			t.Fatalf("request %d Content-Encoding = %q, want %q", i, got[i].contentEncoding, want[i].contentEncoding)
 		}
+		if got[i].acceptEncoding != want[i].acceptEncoding {
+			t.Fatalf("request %d Accept-Encoding = %q, want %q", i, got[i].acceptEncoding, want[i].acceptEncoding)
+		}
+		if got[i].metric.ID != want[i].metric.ID {
+			t.Fatalf("request %d metric ID = %q, want %q", i, got[i].metric.ID, want[i].metric.ID)
+		}
+		if got[i].metric.MType != want[i].metric.MType {
+			t.Fatalf("request %d metric MType = %q, want %q", i, got[i].metric.MType, want[i].metric.MType)
+		}
+		assertFloat64Ptr(t, i, got[i].metric.Value, want[i].metric.Value)
+		assertInt64Ptr(t, i, got[i].metric.Delta, want[i].metric.Delta)
+	}
+}
+
+func assertFloat64Ptr(t *testing.T, requestIndex int, got, want *float64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("request %d metric Value = %v, want %v", requestIndex, got, want)
+	}
+	if *got != *want {
+		t.Fatalf("request %d metric Value = %v, want %v", requestIndex, *got, *want)
+	}
+}
+
+func assertInt64Ptr(t *testing.T, requestIndex int, got, want *int64) {
+	t.Helper()
+
+	if got == nil && want == nil {
+		return
+	}
+	if got == nil || want == nil {
+		t.Fatalf("request %d metric Delta = %v, want %v", requestIndex, got, want)
+	}
+	if *got != *want {
+		t.Fatalf("request %d metric Delta = %v, want %v", requestIndex, *got, *want)
 	}
 }
