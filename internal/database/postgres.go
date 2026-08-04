@@ -1,0 +1,15 @@
+package database
+
+import (
+	"database/sql"
+
+	_ "github.com/lib/pq"
+)
+
+func OpenPostgres(dsn string) (*sql.DB, error) {
+	if dsn == "" {
+		return nil, nil
+	}
+
+	return sql.Open("postgres", dsn)
+}

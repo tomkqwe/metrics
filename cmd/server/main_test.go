@@ -30,6 +30,9 @@ func TestParseConfigUsesDefaults(t *testing.T) {
 	if cfg.Restore != defaultRestore {
 		t.Fatalf("Restore = %v, want %v", cfg.Restore, defaultRestore)
 	}
+	if cfg.DatabaseDSN != "" {
+		t.Fatalf("DatabaseDSN = %q, want empty", cfg.DatabaseDSN)
+	}
 }
 
 func TestParseConfigUsesFlags(t *testing.T) {
@@ -40,6 +43,7 @@ func TestParseConfigUsesFlags(t *testing.T) {
 		"-i", "10",
 		"-f", "/tmp/custom-metrics.json",
 		"-r=false",
+		"-d", "postgres://flag-dsn",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -57,6 +61,9 @@ func TestParseConfigUsesFlags(t *testing.T) {
 	if cfg.Restore {
 		t.Fatal("Restore = true, want false")
 	}
+	if cfg.DatabaseDSN != "postgres://flag-dsn" {
+		t.Fatalf("DatabaseDSN = %q, want postgres://flag-dsn", cfg.DatabaseDSN)
+	}
 }
 
 func TestParseConfigEnvOverridesFlags(t *testing.T) {
@@ -65,12 +72,14 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	t.Setenv("STORE_INTERVAL", "0")
 	t.Setenv("FILE_STORAGE_PATH", "/tmp/env-metrics.json")
 	t.Setenv("RESTORE", "false")
+	t.Setenv("DATABASE_DSN", "postgres://env-dsn")
 
 	cfg, err := parseConfig([]string{
 		"-a", "localhost:9090",
 		"-i", "10",
 		"-f", "/tmp/flag-metrics.json",
 		"-r=true",
+		"-d", "postgres://flag-dsn",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -87,6 +96,9 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	}
 	if cfg.Restore {
 		t.Fatal("Restore = true, want false")
+	}
+	if cfg.DatabaseDSN != "postgres://env-dsn" {
+		t.Fatalf("DatabaseDSN = %q, want postgres://env-dsn", cfg.DatabaseDSN)
 	}
 }
 
@@ -159,7 +171,7 @@ func TestNewServerStorageSkipsRestore(t *testing.T) {
 func unsetServerEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE"} {
+	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)

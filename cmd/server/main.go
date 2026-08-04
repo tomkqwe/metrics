@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
@@ -32,6 +33,7 @@ type config struct {
 	StoreInterval   time.Duration `env:"STORE_INTERVAL"`
 	FileStoragePath string        `env:"FILE_STORAGE_PATH"`
 	Restore         bool          `env:"RESTORE"`
+	DatabaseDSN     string        `env:"DATABASE_DSN"`
 }
 
 func main() {
@@ -47,6 +49,16 @@ func main() {
 	defer func() {
 		_ = logger.Sync()
 	}()
+
+	db, err := database.OpenPostgres(cfg.DatabaseDSN)
+	if err != nil {
+		panic(err)
+	}
+	if db != nil {
+		defer func() {
+			_ = db.Close()
+		}()
+	}
 
 	storage, fileStorage, err := newServerStorage(cfg)
 	if err != nil {
@@ -67,7 +79,7 @@ func main() {
 	defer cancel()
 	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
 
-	handler, err := newServerHandler(logger, metricService)
+	handler, err := newServerHandler(logger, metricService, db)
 	if err != nil {
 		panic(err)
 	}
@@ -90,6 +102,7 @@ func parseConfig(args []string) (config, error) {
 	flags.Var(secondsDurationFlag{value: &cfg.StoreInterval}, "i", "metrics store interval in seconds")
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
 	flags.BoolVar(&cfg.Restore, "r", cfg.Restore, "restore metrics from storage file")
+	flags.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL database DSN")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
@@ -143,7 +156,7 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func newServerHandler(logger *zap.Logger, srv service.Service) (http.Handler, error) {
+func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger) (http.Handler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
 	router.Use(middleware.WithGzip)
@@ -159,6 +172,7 @@ func newServerHandler(logger *zap.Logger, srv service.Service) (http.Handler, er
 	router.Post("/update/", metricsHandler.UpdateMetricJSON)
 	router.Post("/value", metricsHandler.GetMetricJSON)
 	router.Post("/value/", metricsHandler.GetMetricJSON)
+	router.Get("/ping", handler.NewPingHandler(databasePinger).Ping)
 
 	return router, nil
 }
