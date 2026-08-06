@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"net/http"
@@ -18,13 +19,15 @@ import (
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
+	"github.com/tomkqwe/metrics/internal/repository/file_storage"
+	"github.com/tomkqwe/metrics/internal/repository/mem_storage"
+	"github.com/tomkqwe/metrics/internal/repository/postgres"
 	"github.com/tomkqwe/metrics/internal/service"
 )
 
 const (
 	defaultServerAddress        = "localhost:8080"
 	defaultStoreIntervalSeconds = 300
-	defaultFileStoragePath      = "/tmp/metrics-db.json"
 	defaultRestore              = true
 )
 
@@ -60,7 +63,11 @@ func main() {
 		}()
 	}
 
-	storage, fileStorage, err := newServerStorage(cfg)
+	if err := database.RunMigrations(cfg.DatabaseDSN); err != nil {
+		panic(err)
+	}
+
+	storage, fileStorage, err := newServerStorage(cfg, db, logger)
 	if err != nil {
 		panic(err)
 	}
@@ -90,10 +97,9 @@ func main() {
 
 func parseConfig(args []string) (config, error) {
 	cfg := config{
-		ServerAddress:   defaultServerAddress,
-		StoreInterval:   defaultStoreIntervalSeconds * time.Second,
-		FileStoragePath: defaultFileStoragePath,
-		Restore:         defaultRestore,
+		ServerAddress: defaultServerAddress,
+		StoreInterval: defaultStoreIntervalSeconds * time.Second,
+		Restore:       defaultRestore,
 	}
 
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
@@ -177,13 +183,21 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	return router, nil
 }
 
-func newServerStorage(cfg config) (repository.Storage, *repository.FileStorage, error) {
-	storage := repository.NewMemStorage()
+func newServerStorage(cfg config, db *sql.DB, logger *zap.Logger) (repository.Storage, *file_storage.FileStorage, error) {
+	if cfg.DatabaseDSN != "" {
+		if db == nil {
+			return nil, nil, fmt.Errorf("postgres database is nil")
+		}
+
+		return postgres.NewPgStorageWithLogger(db, logger), nil, nil
+	}
+
+	storage := mem_storage.NewMemStorage()
 	if cfg.FileStoragePath == "" {
 		return storage, nil, nil
 	}
 
-	fileStorage := repository.NewFileStorage(cfg.FileStoragePath)
+	fileStorage := file_storage.NewFileStorage(cfg.FileStoragePath)
 	if cfg.Restore {
 		metrics, err := fileStorage.Load()
 		if err != nil {
@@ -201,7 +215,7 @@ func startPeriodicSave(
 	ctx context.Context,
 	interval time.Duration,
 	storage repository.Storage,
-	fileStorage *repository.FileStorage,
+	fileStorage *file_storage.FileStorage,
 	logger *zap.Logger,
 ) {
 	if interval <= 0 || fileStorage == nil {

@@ -1,4 +1,4 @@
-package repository
+package mem_storage
 
 import (
 	"sort"
@@ -7,52 +7,52 @@ import (
 	"github.com/tomkqwe/metrics/internal/model"
 )
 
-type MemStorage struct {
+type Storage struct {
 	mu           sync.RWMutex
 	gaugeStore   map[string]models.Gauge   // name => value
 	counterStore map[string]models.Counter // name => value
 }
 
-func NewMemStorage() *MemStorage {
-	return &MemStorage{
+func NewMemStorage() *Storage {
+	return &Storage{
 		gaugeStore:   make(map[string]models.Gauge),
 		counterStore: make(map[string]models.Counter),
 	}
 }
 
-func (m *MemStorage) UpdateGauge(name string, value models.Gauge) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (s *Storage) UpdateGauge(name string, value models.Gauge) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	m.gaugeStore[name] = value
+	s.gaugeStore[name] = value
 }
 
-func (m *MemStorage) UpdateCounter(name string, value models.Counter) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.counterStore[name] += value
+func (s *Storage) UpdateCounter(name string, value models.Counter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.counterStore[name] += value
 }
 
-func (m *MemStorage) GetGauge(name string) (models.Gauge, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	value, ok := m.gaugeStore[name]
+	value, ok := s.gaugeStore[name]
 	return value, ok
 }
 
-func (m *MemStorage) GetCounter(name string) (models.Counter, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+func (s *Storage) GetCounter(name string) (models.Counter, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-	value, ok := m.counterStore[name]
+	value, ok := s.counterStore[name]
 	return value, ok
 }
 
-func (m *MemStorage) Snapshot() []models.Metric {
-	m.mu.RLock()
-	metrics := make([]models.Metric, 0, len(m.gaugeStore)+len(m.counterStore))
-	for name, value := range m.gaugeStore {
+func (s *Storage) Snapshot() []models.Metric {
+	s.mu.RLock()
+	metrics := make([]models.Metric, 0, len(s.gaugeStore)+len(s.counterStore))
+	for name, value := range s.gaugeStore {
 		gaugeValue := float64(value)
 		metrics = append(metrics, models.Metric{
 			ID:    name,
@@ -60,7 +60,7 @@ func (m *MemStorage) Snapshot() []models.Metric {
 			Value: &gaugeValue,
 		})
 	}
-	for name, value := range m.counterStore {
+	for name, value := range s.counterStore {
 		counterValue := int64(value)
 		metrics = append(metrics, models.Metric{
 			ID:    name,
@@ -68,7 +68,7 @@ func (m *MemStorage) Snapshot() []models.Metric {
 			Delta: &counterValue,
 		})
 	}
-	m.mu.RUnlock()
+	s.mu.RUnlock()
 
 	sort.Slice(metrics, func(i, j int) bool {
 		if metrics[i].MType == metrics[j].MType {

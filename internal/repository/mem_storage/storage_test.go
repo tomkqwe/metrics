@@ -1,4 +1,4 @@
-package repository
+package mem_storage
 
 import (
 	"testing"

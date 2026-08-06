@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/tomkqwe/metrics/internal/repository/mem_storage"
 	"strings"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestRestoreMetrics(t *testing.T) {
-	storage := NewMemStorage()
+	storage := mem_storage.NewMemStorage()
 	gaugeValue := 12.5
 	counterValue := int64(3)
 
@@ -70,7 +71,7 @@ func TestRestoreMetricsReturnsErrorForInvalidMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := RestoreMetrics(NewMemStorage(), []models.Metric{tt.metric})
+			err := RestoreMetrics(mem_storage.NewMemStorage(), []models.Metric{tt.metric})
 			if err == nil {
 				t.Fatal("RestoreMetrics() error = nil, want error")
 			}

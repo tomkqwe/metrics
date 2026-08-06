@@ -1,13 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	models "github.com/tomkqwe/metrics/internal/model"
-	"github.com/tomkqwe/metrics/internal/repository"
+	"github.com/tomkqwe/metrics/internal/repository/file_storage"
+	"github.com/tomkqwe/metrics/internal/repository/postgres"
 )
 
 func TestParseConfigUsesDefaults(t *testing.T) {
@@ -24,8 +26,8 @@ func TestParseConfigUsesDefaults(t *testing.T) {
 	if cfg.StoreInterval != defaultStoreIntervalSeconds*time.Second {
 		t.Fatalf("StoreInterval = %v, want %v", cfg.StoreInterval, defaultStoreIntervalSeconds*time.Second)
 	}
-	if cfg.FileStoragePath != defaultFileStoragePath {
-		t.Fatalf("FileStoragePath = %q, want %q", cfg.FileStoragePath, defaultFileStoragePath)
+	if cfg.FileStoragePath != "" {
+		t.Fatalf("FileStoragePath = %q, want empty", cfg.FileStoragePath)
 	}
 	if cfg.Restore != defaultRestore {
 		t.Fatalf("Restore = %v, want %v", cfg.Restore, defaultRestore)
@@ -104,7 +106,7 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 
 func TestNewServerStorageRestoresMetrics(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	fileStorage := repository.NewFileStorage(path)
+	fileStorage := file_storage.NewFileStorage(path)
 	gaugeValue := 12.5
 	counterValue := int64(3)
 	if err := fileStorage.Save([]models.Metric{
@@ -125,7 +127,7 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 	storage, restoredFileStorage, err := newServerStorage(config{
 		FileStoragePath: path,
 		Restore:         true,
-	})
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
@@ -143,7 +145,7 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 
 func TestNewServerStorageSkipsRestore(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	fileStorage := repository.NewFileStorage(path)
+	fileStorage := file_storage.NewFileStorage(path)
 	gaugeValue := 12.5
 	if err := fileStorage.Save([]models.Metric{
 		{
@@ -158,13 +160,62 @@ func TestNewServerStorageSkipsRestore(t *testing.T) {
 	storage, _, err := newServerStorage(config{
 		FileStoragePath: path,
 		Restore:         false,
-	})
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
 
 	if _, ok := storage.GetGauge("Alloc"); ok {
 		t.Fatal("GetGauge() ok = true, want false")
+	}
+}
+
+func TestNewServerStorageUsesMemoryWhenFileStoragePathEmpty(t *testing.T) {
+	storage, fileStorage, err := newServerStorage(config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("newServerStorage() error = %v", err)
+	}
+	if fileStorage != nil {
+		t.Fatal("file storage is configured, want nil")
+	}
+
+	storage.UpdateGauge("Alloc", models.Gauge(12.5))
+	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(12.5) {
+		t.Fatalf("GetGauge() = %v, %v, want 12.5, true", value, ok)
+	}
+}
+
+func TestNewServerStorageUsesPostgresWhenDatabaseDSNConfigured(t *testing.T) {
+	db, err := sql.Open("postgres", "postgres://user:pass@localhost:5432/metrics?sslmode=disable")
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	storage, fileStorage, err := newServerStorage(config{
+		DatabaseDSN:     "postgres://user:pass@localhost:5432/metrics?sslmode=disable",
+		FileStoragePath: filepath.Join(t.TempDir(), "metrics.json"),
+		Restore:         true,
+	}, db, nil)
+	if err != nil {
+		t.Fatalf("newServerStorage() error = %v", err)
+	}
+	if fileStorage != nil {
+		t.Fatal("file storage is configured, want nil")
+	}
+	if _, ok := storage.(*postgres.Storage); !ok {
+		t.Fatalf("storage type = %T, want *postgres.Storage", storage)
+	}
+}
+
+func TestNewServerStorageReturnsErrorWhenDatabaseDSNConfiguredWithoutDB(t *testing.T) {
+	_, _, err := newServerStorage(config{
+		DatabaseDSN: "postgres://user:pass@localhost:5432/metrics?sslmode=disable",
+	}, nil, nil)
+	if err == nil {
+		t.Fatal("newServerStorage() error = nil, want error")
 	}
 }
 
