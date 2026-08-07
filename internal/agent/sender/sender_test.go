@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	models "github.com/tomkqwe/metrics/internal/model"
 )
@@ -108,6 +110,66 @@ func TestHTTPSenderSendSkipsEmptyBatch(t *testing.T) {
 	}
 }
 
+func TestHTTPSenderRetriesTransportErrors(t *testing.T) {
+	attempts := 0
+	s := NewHTTPSenderWithClient("http://example.com", &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			attempts++
+			if attempts < 4 {
+				return nil, errors.New("connection refused")
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("")),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	})
+	s.retryDelays = []time.Duration{0, 0, 0}
+
+	value := 12.5
+	err := s.Send([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &value,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if attempts != 4 {
+		t.Fatalf("attempts = %d, want 4", attempts)
+	}
+}
+
+func TestHTTPSenderStopsAfterRetryLimit(t *testing.T) {
+	attempts := 0
+	s := NewHTTPSenderWithClient("http://example.com", &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			attempts++
+			return nil, errors.New("connection refused")
+		}),
+	})
+	s.retryDelays = []time.Duration{0, 0, 0}
+
+	value := 12.5
+	err := s.Send([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &value,
+		},
+	})
+	if !errors.Is(err, ErrTransport) {
+		t.Fatalf("Send() error = %v, want ErrTransport", err)
+	}
+	if attempts != 4 {
+		t.Fatalf("attempts = %d, want 4", attempts)
+	}
+}
+
 func TestHTTPSenderSendReturnsErrorOnUnexpectedStatusCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -167,6 +229,12 @@ func TestHTTPSenderSendReturnsErrorForInvalidMetric(t *testing.T) {
 			}
 		})
 	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
 }
 
 type receivedRequest struct {

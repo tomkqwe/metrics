@@ -1,11 +1,15 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
+
+	"github.com/tomkqwe/metrics/internal/postgreserr"
+	"github.com/tomkqwe/metrics/internal/retry"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -34,7 +38,8 @@ func RunMigrations(dsn string) error {
 		_ = databaseErr
 	}()
 
-	if err = m.Up(); err != nil {
+	err = retry.Do(context.Background(), m.Up, postgreserr.IsConnectionException)
+	if err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			return nil
 		}

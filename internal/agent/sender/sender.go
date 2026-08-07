@@ -3,24 +3,29 @@ package sender
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	models "github.com/tomkqwe/metrics/internal/model"
+	"github.com/tomkqwe/metrics/internal/retry"
 )
 
 var (
 	ErrInvalidMetric        = errors.New("invalid metric")
+	ErrTransport            = errors.New("transport error")
 	ErrUnexpectedStatusCode = errors.New("unexpected status code")
 )
 
 type HTTPSender struct {
-	baseURL string
-	client  *http.Client
+	baseURL     string
+	client      *http.Client
+	retryDelays []time.Duration
 }
 
 func NewHTTPSender(baseURL string) *HTTPSender {
@@ -33,8 +38,9 @@ func NewHTTPSenderWithClient(baseURL string, client *http.Client) *HTTPSender {
 	}
 
 	return &HTTPSender{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		client:  client,
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		client:      client,
+		retryDelays: retry.DefaultDelays(),
 	}
 }
 
@@ -54,7 +60,13 @@ func (s *HTTPSender) Send(metrics []models.Metric) error {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.metricsURL(), body)
+	return retry.DoWithDelays(context.Background(), s.retryDelays, func() error {
+		return s.sendCompressedBody(body)
+	}, isRetriableSendError)
+}
+
+func (s *HTTPSender) sendCompressedBody(body []byte) error {
+	req, err := http.NewRequest(http.MethodPost, s.metricsURL(), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -64,7 +76,7 @@ func (s *HTTPSender) Send(metrics []models.Metric) error {
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrTransport, err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -82,7 +94,7 @@ func (s *HTTPSender) metricsURL() string {
 	return s.baseURL + "/updates/"
 }
 
-func compressedBody(metrics []models.Metric) (*bytes.Buffer, error) {
+func compressedBody(metrics []models.Metric) ([]byte, error) {
 	var body bytes.Buffer
 	writer := gzip.NewWriter(&body)
 	if err := json.NewEncoder(writer).Encode(metrics); err != nil {
@@ -93,7 +105,11 @@ func compressedBody(metrics []models.Metric) (*bytes.Buffer, error) {
 		return nil, err
 	}
 
-	return &body, nil
+	return body.Bytes(), nil
+}
+
+func isRetriableSendError(err error) bool {
+	return errors.Is(err, ErrTransport)
 }
 
 func validateMetric(metric models.Metric) error {

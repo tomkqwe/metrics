@@ -3,6 +3,10 @@ package handler
 import (
 	"context"
 	"net/http"
+	"time"
+
+	"github.com/tomkqwe/metrics/internal/postgreserr"
+	"github.com/tomkqwe/metrics/internal/retry"
 )
 
 type DatabasePinger interface {
@@ -10,12 +14,14 @@ type DatabasePinger interface {
 }
 
 type PingHandler struct {
-	db DatabasePinger
+	db          DatabasePinger
+	retryDelays []time.Duration
 }
 
 func NewPingHandler(db DatabasePinger) *PingHandler {
 	return &PingHandler{
-		db: db,
+		db:          db,
+		retryDelays: retry.DefaultDelays(),
 	}
 }
 
@@ -25,7 +31,9 @@ func (h *PingHandler) Ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.PingContext(r.Context()); err != nil {
+	if err := retry.DoWithDelays(r.Context(), h.retryDelays, func() error {
+		return h.db.PingContext(r.Context())
+	}, postgreserr.IsConnectionException); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
