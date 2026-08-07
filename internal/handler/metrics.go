@@ -152,6 +152,23 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	w.Header().Set("Content-Type", "application/json")
+
+	var reqBody []models.Metric
+	if err := decoder.Decode(&reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if err := m.service.UpdateMetricsJSON(reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var reqBody models.Metric

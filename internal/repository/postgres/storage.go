@@ -19,6 +19,22 @@ const (
 )
 
 var _ repository.Storage = (*Storage)(nil)
+var _ repository.BatchStorage = (*Storage)(nil)
+
+const (
+	upsertGaugeQuery = `
+		INSERT INTO gauges (id, value)
+		VALUES ($1, $2)
+		ON CONFLICT (id)
+		DO UPDATE SET value = EXCLUDED.value
+	`
+	upsertCounterQuery = `
+		INSERT INTO counters (id, value)
+		VALUES ($1, $2)
+		ON CONFLICT (id)
+		DO UPDATE SET value = counters.value + EXCLUDED.value
+	`
+)
 
 type Storage struct {
 	db  *sql.DB
@@ -45,13 +61,7 @@ func (s *Storage) UpdateGauge(name string, value models.Gauge) {
 		return
 	}
 
-	query := `
-		INSERT INTO gauges (id, value)
-		VALUES ($1, $2)
-		ON CONFLICT (id)
-		DO UPDATE SET value = EXCLUDED.value
-	`
-	_, err := s.db.ExecContext(context.Background(), query, name, float64(value))
+	_, err := s.db.ExecContext(context.Background(), upsertGaugeQuery, name, float64(value))
 	if err != nil {
 		s.logger().Error("failed to update gauge",
 			zap.Error(err),
@@ -66,13 +76,7 @@ func (s *Storage) UpdateCounter(name string, value models.Counter) {
 		return
 	}
 
-	query := `
-		INSERT INTO counters (id, value)
-		VALUES ($1, $2)
-		ON CONFLICT (id)
-		DO UPDATE SET value = counters.value + EXCLUDED.value
-	`
-	_, err := s.db.ExecContext(context.Background(), query, name, int64(value))
+	_, err := s.db.ExecContext(context.Background(), upsertCounterQuery, name, int64(value))
 	if err != nil {
 		s.logger().Error("failed to update counter",
 			zap.Error(err),
@@ -80,6 +84,47 @@ func (s *Storage) UpdateCounter(name string, value models.Counter) {
 			zap.Int64(logFieldValue, int64(value)),
 		)
 	}
+}
+
+func (s *Storage) UpdateMetrics(metrics []models.Metric) {
+	if len(metrics) == 0 {
+		return
+	}
+	if !s.ready("failed to update metrics batch") {
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		s.logger().Error("failed to begin metrics batch transaction", zap.Error(err))
+		return
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				s.logger().Error("failed to rollback metrics batch transaction", zap.Error(rollbackErr))
+			}
+		}
+	}()
+
+	for _, metric := range metrics {
+		if err = updateMetricTx(ctx, tx, metric); err != nil {
+			s.logger().Error("failed to update metric in batch",
+				zap.Error(err),
+				zap.String(logFieldMetric, metric.ID),
+			)
+			return
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		s.logger().Error("failed to commit metrics batch transaction", zap.Error(err))
+		return
+	}
+	committed = true
 }
 
 func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
@@ -236,6 +281,29 @@ func (s *Storage) snapshotCounters(ctx context.Context) (metrics []models.Metric
 	}
 
 	return metrics, nil
+}
+
+func updateMetricTx(ctx context.Context, tx *sql.Tx, metric models.Metric) error {
+	switch metric.MType {
+	case models.MetricTypeGauge:
+		if metric.Value == nil {
+			return fmt.Errorf("gauge metric %q has nil value", metric.ID)
+		}
+		if _, err := tx.ExecContext(ctx, upsertGaugeQuery, metric.ID, *metric.Value); err != nil {
+			return fmt.Errorf("upsert gauge: %w", err)
+		}
+	case models.MetricTypeCounter:
+		if metric.Delta == nil {
+			return fmt.Errorf("counter metric %q has nil delta", metric.ID)
+		}
+		if _, err := tx.ExecContext(ctx, upsertCounterQuery, metric.ID, *metric.Delta); err != nil {
+			return fmt.Errorf("upsert counter: %w", err)
+		}
+	default:
+		return fmt.Errorf("unknown metric type %q", metric.MType)
+	}
+
+	return nil
 }
 
 func (s *Storage) ready(message string) bool {

@@ -50,6 +50,44 @@ func TestMemStorageUpdateReplacesGaugeAndAccumulatesCounter(t *testing.T) {
 	}
 }
 
+func TestMemStorageUpdateMetrics(t *testing.T) {
+	storage := NewMemStorage()
+	gaugeValue := 12.5
+	updatedGaugeValue := 25.5
+	counterDelta := int64(3)
+	updatedCounterDelta := int64(5)
+
+	storage.UpdateMetrics([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &gaugeValue,
+		},
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &updatedGaugeValue,
+		},
+		{
+			ID:    "PollCount",
+			MType: models.MetricTypeCounter,
+			Delta: &counterDelta,
+		},
+		{
+			ID:    "PollCount",
+			MType: models.MetricTypeCounter,
+			Delta: &updatedCounterDelta,
+		},
+	})
+
+	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(25.5) {
+		t.Fatalf("GetGauge() = %v, %v, want 25.5, true", value, ok)
+	}
+	if value, ok := storage.GetCounter("PollCount"); !ok || value != models.Counter(8) {
+		t.Fatalf("GetCounter() = %v, %v, want 8, true", value, ok)
+	}
+}
+
 func TestMemStorageGetUnknownMetric(t *testing.T) {
 	storage := NewMemStorage()
 

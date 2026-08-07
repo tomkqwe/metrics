@@ -33,6 +33,24 @@ func (s *Storage) UpdateCounter(name string, value models.Counter) {
 	s.counterStore[name] += value
 }
 
+func (s *Storage) UpdateMetrics(metrics []models.Metric) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case models.MetricTypeGauge:
+			if metric.Value != nil {
+				s.gaugeStore[metric.ID] = models.Gauge(*metric.Value)
+			}
+		case models.MetricTypeCounter:
+			if metric.Delta != nil {
+				s.counterStore[metric.ID] += models.Counter(*metric.Delta)
+			}
+		}
+	}
+}
+
 func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

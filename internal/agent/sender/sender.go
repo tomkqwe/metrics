@@ -40,25 +40,21 @@ func NewHTTPSenderWithClient(baseURL string, client *http.Client) *HTTPSender {
 
 func (s *HTTPSender) Send(metrics []models.Metric) error {
 	for _, metric := range metrics {
-		if err := s.sendMetric(metric); err != nil {
+		if err := validateMetric(metric); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (s *HTTPSender) sendMetric(metric models.Metric) error {
-	if err := validateMetric(metric); err != nil {
-		return err
+	if len(metrics) == 0 {
+		return nil
 	}
 
-	body, err := compressedBody(metric)
+	body, err := compressedBody(metrics)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, s.metricURL(), body)
+	req, err := http.NewRequest(http.MethodPost, s.metricsURL(), body)
 	if err != nil {
 		return err
 	}
@@ -82,14 +78,14 @@ func (s *HTTPSender) sendMetric(metric models.Metric) error {
 	return nil
 }
 
-func (s *HTTPSender) metricURL() string {
-	return s.baseURL + "/update"
+func (s *HTTPSender) metricsURL() string {
+	return s.baseURL + "/updates/"
 }
 
-func compressedBody(metric models.Metric) (*bytes.Buffer, error) {
+func compressedBody(metrics []models.Metric) (*bytes.Buffer, error) {
 	var body bytes.Buffer
 	writer := gzip.NewWriter(&body)
-	if err := json.NewEncoder(writer).Encode(metric); err != nil {
+	if err := json.NewEncoder(writer).Encode(metrics); err != nil {
 		_ = writer.Close()
 		return nil, err
 	}

@@ -9,3 +9,7 @@ type Storage interface {
 	GetCounter(name string) (models.Counter, bool)
 	Snapshot() []models.Metric
 }
+
+type BatchStorage interface {
+	UpdateMetrics(metrics []models.Metric)
+}

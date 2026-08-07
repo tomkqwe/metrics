@@ -283,6 +283,145 @@ func TestMetricServiceUpdateMetricJSON(t *testing.T) {
 	}
 }
 
+func TestMetricServiceUpdateMetricsJSON(t *testing.T) {
+	gaugeValue := 12.5
+	counterDelta := int64(3)
+	storage := &fakeStorage{}
+	service, err := NewMetricService(storage)
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetricsJSON([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &gaugeValue,
+		},
+		{
+			ID:    "PollCount",
+			MType: models.MetricTypeCounter,
+			Delta: &counterDelta,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateMetricsJSON() error = %v", err)
+	}
+
+	if !storage.gaugeCalled {
+		t.Fatal("UpdateGauge() was not called")
+	}
+	if storage.gaugeName != "Alloc" || storage.gaugeValue != models.Gauge(12.5) {
+		t.Fatalf("UpdateGauge() = %q, %v, want Alloc, 12.5", storage.gaugeName, storage.gaugeValue)
+	}
+	if !storage.counterCalled {
+		t.Fatal("UpdateCounter() was not called")
+	}
+	if storage.counterName != "PollCount" || storage.counterValue != models.Counter(3) {
+		t.Fatalf("UpdateCounter() = %q, %v, want PollCount, 3", storage.counterName, storage.counterValue)
+	}
+}
+
+func TestMetricServiceUpdateMetricsJSONUsesBatchStorage(t *testing.T) {
+	value := 12.5
+	storage := &fakeBatchStorage{}
+	service, err := NewMetricService(storage)
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetricsJSON([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &value,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateMetricsJSON() error = %v", err)
+	}
+
+	if !storage.updateMetricsCalled {
+		t.Fatal("UpdateMetrics() was not called")
+	}
+	if len(storage.updateMetrics) != 1 {
+		t.Fatalf("UpdateMetrics() len = %d, want 1", len(storage.updateMetrics))
+	}
+	if storage.gaugeCalled || storage.counterCalled {
+		t.Fatal("single metric update was called, want batch update")
+	}
+}
+
+func TestMetricServiceUpdateMetricsJSONPersistsOnce(t *testing.T) {
+	gaugeValue := 12.5
+	counterDelta := int64(3)
+	storage := &fakeStorage{
+		snapshot: []models.Metric{
+			{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &gaugeValue,
+			},
+			{
+				ID:    "PollCount",
+				MType: models.MetricTypeCounter,
+				Delta: &counterDelta,
+			},
+		},
+	}
+	saveCalls := 0
+	service, err := NewMetricService(storage, WithUpdatePersister(func(metrics []models.Metric) error {
+		saveCalls++
+		return nil
+	}))
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetricsJSON([]models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &gaugeValue,
+		},
+		{
+			ID:    "PollCount",
+			MType: models.MetricTypeCounter,
+			Delta: &counterDelta,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateMetricsJSON() error = %v", err)
+	}
+
+	if saveCalls != 1 {
+		t.Fatalf("save calls = %d, want 1", saveCalls)
+	}
+}
+
+func TestMetricServiceUpdateMetricsJSONSkipsEmptyBatch(t *testing.T) {
+	storage := &fakeStorage{}
+	saveCalls := 0
+	service, err := NewMetricService(storage, WithUpdatePersister(func(metrics []models.Metric) error {
+		saveCalls++
+		return nil
+	}))
+	if err != nil {
+		t.Fatalf("NewMetricService() error = %v", err)
+	}
+
+	err = service.UpdateMetricsJSON(nil)
+	if err != nil {
+		t.Fatalf("UpdateMetricsJSON() error = %v", err)
+	}
+	if storage.gaugeCalled || storage.counterCalled {
+		t.Fatal("storage update was called for empty batch")
+	}
+	if saveCalls != 0 {
+		t.Fatalf("save calls = %d, want 0", saveCalls)
+	}
+}
+
 func TestMetricServicePersistsAfterSuccessfulUpdate(t *testing.T) {
 	value := 12.5
 	storage := &fakeStorage{
@@ -388,6 +527,65 @@ func TestMetricServiceUpdateMetricJSONReturnsErrorForInvalidMetric(t *testing.T)
 			}
 			if storage.gaugeCalled || storage.counterCalled {
 				t.Fatal("storage update was called for invalid metric")
+			}
+		})
+	}
+}
+
+func TestMetricServiceUpdateMetricsJSONReturnsErrorForInvalidMetric(t *testing.T) {
+	validValue := 12.5
+	tests := []struct {
+		name    string
+		metric  models.Metric
+		wantErr error
+	}{
+		{
+			name: "empty name",
+			metric: models.Metric{
+				MType: models.MetricTypeGauge,
+				Value: &validValue,
+			},
+			wantErr: ErrInvalidMetricName,
+		},
+		{
+			name: "gauge without value",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+			},
+			wantErr: ErrInvalidMetricValue,
+		},
+		{
+			name: "unknown type",
+			metric: models.Metric{
+				ID:    "Alloc",
+				MType: "unknown",
+			},
+			wantErr: ErrUnknownMetricType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &fakeStorage{}
+			service, err := NewMetricService(storage)
+			if err != nil {
+				t.Fatalf("NewMetricService() error = %v", err)
+			}
+
+			err = service.UpdateMetricsJSON([]models.Metric{
+				{
+					ID:    "ValidMetric",
+					MType: models.MetricTypeGauge,
+					Value: &validValue,
+				},
+				tt.metric,
+			})
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("UpdateMetricsJSON() error = %v, want %v", err, tt.wantErr)
+			}
+			if storage.gaugeCalled || storage.counterCalled {
+				t.Fatal("storage update was called for invalid batch")
 			}
 		})
 	}
@@ -521,6 +719,17 @@ type fakeStorage struct {
 	gauges        map[string]models.Gauge
 	counters      map[string]models.Counter
 	snapshot      []models.Metric
+}
+
+type fakeBatchStorage struct {
+	fakeStorage
+	updateMetricsCalled bool
+	updateMetrics       []models.Metric
+}
+
+func (s *fakeBatchStorage) UpdateMetrics(metrics []models.Metric) {
+	s.updateMetricsCalled = true
+	s.updateMetrics = append([]models.Metric(nil), metrics...)
 }
 
 func (s *fakeStorage) UpdateGauge(name string, value models.Gauge) {

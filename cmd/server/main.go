@@ -176,6 +176,8 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	router.Get("/", metricsHandler.ListMetrics)
 	router.Post("/update", metricsHandler.UpdateMetricJSON)
 	router.Post("/update/", metricsHandler.UpdateMetricJSON)
+	router.Post("/updates", metricsHandler.UpdateMetricsJSON)
+	router.Post("/updates/", metricsHandler.UpdateMetricsJSON)
 	router.Post("/value", metricsHandler.GetMetricJSON)
 	router.Post("/value/", metricsHandler.GetMetricJSON)
 	router.Get("/ping", handler.NewPingHandler(databasePinger).Ping)

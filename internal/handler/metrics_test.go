@@ -294,6 +294,79 @@ func TestMetricsHandlerUpdateMetricJSONRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
+func TestMetricsHandlerUpdateMetricsJSONSuccess(t *testing.T) {
+	service := &fakeService{}
+	handler, err := NewMetricsHandler(service)
+	if err != nil {
+		t.Fatalf("NewMetricsHandler() error = %v", err)
+	}
+
+	response := executeRequestWithBody(
+		newTestRouter(handler),
+		http.MethodPost,
+		"/updates/",
+		`[{"id":"Alloc","type":"gauge","value":12.5},{"id":"PollCount","type":"counter","delta":3}]`,
+	)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("Content-Type = %q, want %q", contentType, "application/json")
+	}
+	if !service.updateJSONBatchCalled {
+		t.Fatal("UpdateMetricsJSON() was not called")
+	}
+	if len(service.updateJSONBatch) != 2 {
+		t.Fatalf("UpdateMetricsJSON() len = %d, want 2", len(service.updateJSONBatch))
+	}
+	if service.updateJSONBatch[0].ID != "Alloc" {
+		t.Fatalf("UpdateMetricsJSON()[0].ID = %q, want Alloc", service.updateJSONBatch[0].ID)
+	}
+	if service.updateJSONBatch[1].ID != "PollCount" {
+		t.Fatalf("UpdateMetricsJSON()[1].ID = %q, want PollCount", service.updateJSONBatch[1].ID)
+	}
+}
+
+func TestMetricsHandlerUpdateMetricsJSONRejectsInvalidRequests(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		serviceErr error
+		wantCalled bool
+	}{
+		{
+			name: "invalid json",
+			body: "{",
+		},
+		{
+			name:       "service error",
+			body:       `[{"id":"Alloc","type":"gauge"}]`,
+			serviceErr: service.ErrInvalidMetricValue,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &fakeService{updateJSONBatchErr: tt.serviceErr}
+			handler, err := NewMetricsHandler(service)
+			if err != nil {
+				t.Fatalf("NewMetricsHandler() error = %v", err)
+			}
+
+			response := executeRequestWithBody(newTestRouter(handler), http.MethodPost, "/updates/", tt.body)
+
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+			}
+			if service.updateJSONBatchCalled != tt.wantCalled {
+				t.Fatalf("UpdateMetricsJSON() called = %v, want %v", service.updateJSONBatchCalled, tt.wantCalled)
+			}
+		})
+	}
+}
+
 func TestMetricsHandlerGetMetricJSONSuccess(t *testing.T) {
 	value := 1744184459.0
 	service := &fakeService{
@@ -399,6 +472,7 @@ func newTestRouter(handler *MetricsHandler) http.Handler {
 	router.Get("/value/{metricType}/{metricName}", handler.GetMetricValue)
 	router.Get("/", handler.ListMetrics)
 	router.Post("/update/", handler.UpdateMetricJSON)
+	router.Post("/updates/", handler.UpdateMetricsJSON)
 	router.Post("/value/", handler.GetMetricJSON)
 
 	return router
@@ -423,23 +497,26 @@ func executeRequestWithBody(handler http.Handler, method, path, body string) *ht
 }
 
 type fakeService struct {
-	called           bool
-	metricType       string
-	metricName       string
-	value            string
-	err              error
-	getMetricType    string
-	getMetricName    string
-	getValue         string
-	getErr           error
-	metrics          []models.Metric
-	updateJSONCalled bool
-	updateJSONMetric models.Metric
-	updateJSONErr    error
-	getJSONCalled    bool
-	getJSONMetric    models.Metric
-	getJSONResult    models.Metric
-	getJSONErr       error
+	called                bool
+	metricType            string
+	metricName            string
+	value                 string
+	err                   error
+	getMetricType         string
+	getMetricName         string
+	getValue              string
+	getErr                error
+	metrics               []models.Metric
+	updateJSONCalled      bool
+	updateJSONMetric      models.Metric
+	updateJSONErr         error
+	updateJSONBatchCalled bool
+	updateJSONBatch       []models.Metric
+	updateJSONBatchErr    error
+	getJSONCalled         bool
+	getJSONMetric         models.Metric
+	getJSONResult         models.Metric
+	getJSONErr            error
 }
 
 func (s *fakeService) UpdateMetric(metricType, metricName, value string) error {
@@ -469,6 +546,13 @@ func (s *fakeService) UpdateMetricJSON(metric *models.Metric) error {
 	}
 
 	return s.updateJSONErr
+}
+
+func (s *fakeService) UpdateMetricsJSON(metrics []models.Metric) error {
+	s.updateJSONBatchCalled = true
+	s.updateJSONBatch = append([]models.Metric(nil), metrics...)
+
+	return s.updateJSONBatchErr
 }
 
 func (s *fakeService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {

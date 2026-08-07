@@ -94,28 +94,29 @@ func (m *MetricService) UpdateMetricJSON(metric *models.Metric) error {
 	if metric == nil {
 		return ErrNilMetric
 	}
-	if metric.ID == "" {
-		return ErrInvalidMetricName
+	if err := validateMetric(*metric); err != nil {
+		return err
 	}
 
-	switch metric.MType {
-	case models.MetricTypeGauge:
-		if metric.Value == nil {
-			return ErrInvalidMetricValue
-		}
-		return m.updateAndPersist(func() {
-			m.storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
-		})
-	case models.MetricTypeCounter:
-		if metric.Delta == nil {
-			return ErrInvalidMetricValue
-		}
-		return m.updateAndPersist(func() {
-			m.storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
-		})
-	default:
-		return ErrUnknownMetricType
+	return m.updateAndPersist(func() {
+		m.updateMetric(*metric)
+	})
+}
+
+func (m *MetricService) UpdateMetricsJSON(metrics []models.Metric) error {
+	if len(metrics) == 0 {
+		return nil
 	}
+
+	for _, metric := range metrics {
+		if err := validateMetric(metric); err != nil {
+			return err
+		}
+	}
+
+	return m.updateAndPersist(func() {
+		m.updateMetrics(metrics)
+	})
 }
 
 func (m *MetricService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {
@@ -157,4 +158,45 @@ func (m *MetricService) updateAndPersist(update func()) error {
 
 	update()
 	return m.saveOnUpdate(m.storage.Snapshot())
+}
+
+func (m *MetricService) updateMetrics(metrics []models.Metric) {
+	if batchStorage, ok := m.storage.(repository.BatchStorage); ok {
+		batchStorage.UpdateMetrics(metrics)
+		return
+	}
+
+	for _, metric := range metrics {
+		m.updateMetric(metric)
+	}
+}
+
+func (m *MetricService) updateMetric(metric models.Metric) {
+	switch metric.MType {
+	case models.MetricTypeGauge:
+		m.storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
+	case models.MetricTypeCounter:
+		m.storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
+	}
+}
+
+func validateMetric(metric models.Metric) error {
+	if metric.ID == "" {
+		return ErrInvalidMetricName
+	}
+
+	switch metric.MType {
+	case models.MetricTypeGauge:
+		if metric.Value == nil {
+			return ErrInvalidMetricValue
+		}
+	case models.MetricTypeCounter:
+		if metric.Delta == nil {
+			return ErrInvalidMetricValue
+		}
+	default:
+		return ErrUnknownMetricType
+	}
+
+	return nil
 }
