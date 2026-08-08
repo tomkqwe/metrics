@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"sync"
@@ -20,6 +21,7 @@ var (
 
 type MetricService struct {
 	storage      repository.Storage
+	batchStorage repository.BatchStorage
 	saveOnUpdate func([]models.Metric) error
 	saveMu       sync.Mutex
 }
@@ -37,6 +39,9 @@ func NewMetricService(storage repository.Storage, options ...MetricServiceOption
 		return nil, ErrInvalidStorage
 	}
 	service := &MetricService{storage: storage}
+	if batchStorage, ok := storage.(repository.BatchStorage); ok {
+		service.batchStorage = batchStorage
+	}
 	for _, option := range options {
 		option(service)
 	}
@@ -44,39 +49,45 @@ func NewMetricService(storage repository.Storage, options ...MetricServiceOption
 	return service, nil
 }
 
-func (m *MetricService) UpdateMetric(metricType, metricName, value string) error {
+func (m *MetricService) UpdateMetric(ctx context.Context, metricType, metricName, value string) error {
 	switch metricType {
 	case models.MetricTypeGauge:
 		float, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return err
 		}
-		return m.updateAndPersist(func() {
-			m.storage.UpdateGauge(metricName, models.Gauge(float))
+		return m.updateAndPersist(ctx, func(ctx context.Context) error {
+			return m.storage.UpdateGauge(ctx, metricName, models.Gauge(float))
 		})
 	case models.MetricTypeCounter:
 		i, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return err
 		}
-		return m.updateAndPersist(func() {
-			m.storage.UpdateCounter(metricName, models.Counter(i))
+		return m.updateAndPersist(ctx, func(ctx context.Context) error {
+			return m.storage.UpdateCounter(ctx, metricName, models.Counter(i))
 		})
 	default:
 		return ErrUnknownMetricType
 	}
 }
 
-func (m *MetricService) GetMetricValue(metricType, metricName string) (string, error) {
+func (m *MetricService) GetMetricValue(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.MetricTypeGauge:
-		value, ok := m.storage.GetGauge(metricName)
+		value, ok, err := m.storage.GetGauge(ctx, metricName)
+		if err != nil {
+			return "", err
+		}
 		if !ok {
 			return "", ErrMetricNotFound
 		}
 		return strconv.FormatFloat(float64(value), 'f', -1, 64), nil
 	case models.MetricTypeCounter:
-		value, ok := m.storage.GetCounter(metricName)
+		value, ok, err := m.storage.GetCounter(ctx, metricName)
+		if err != nil {
+			return "", err
+		}
 		if !ok {
 			return "", ErrMetricNotFound
 		}
@@ -86,11 +97,11 @@ func (m *MetricService) GetMetricValue(metricType, metricName string) (string, e
 	}
 }
 
-func (m *MetricService) ListMetrics() []models.Metric {
-	return m.storage.Snapshot()
+func (m *MetricService) ListMetrics(ctx context.Context) ([]models.Metric, error) {
+	return m.storage.Snapshot(ctx)
 }
 
-func (m *MetricService) UpdateMetricJSON(metric *models.Metric) error {
+func (m *MetricService) UpdateMetricJSON(ctx context.Context, metric *models.Metric) error {
 	if metric == nil {
 		return ErrNilMetric
 	}
@@ -98,12 +109,12 @@ func (m *MetricService) UpdateMetricJSON(metric *models.Metric) error {
 		return err
 	}
 
-	return m.updateAndPersist(func() {
-		m.updateMetric(*metric)
+	return m.updateAndPersist(ctx, func(ctx context.Context) error {
+		return m.updateMetric(ctx, *metric)
 	})
 }
 
-func (m *MetricService) UpdateMetricsJSON(metrics []models.Metric) error {
+func (m *MetricService) UpdateMetricsJSON(ctx context.Context, metrics []models.Metric) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -114,12 +125,12 @@ func (m *MetricService) UpdateMetricsJSON(metrics []models.Metric) error {
 		}
 	}
 
-	return m.updateAndPersist(func() {
-		m.updateMetrics(metrics)
+	return m.updateAndPersist(ctx, func(ctx context.Context) error {
+		return m.updateMetrics(ctx, metrics)
 	})
 }
 
-func (m *MetricService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {
+func (m *MetricService) GetMetricJSON(ctx context.Context, metric *models.Metric) (models.Metric, error) {
 	if metric == nil {
 		return models.Metric{}, ErrNilMetric
 	}
@@ -128,16 +139,22 @@ func (m *MetricService) GetMetricJSON(metric *models.Metric) (models.Metric, err
 	}
 	switch metric.MType {
 	case models.MetricTypeGauge:
-		gauge, b := m.storage.GetGauge(metric.ID)
-		if !b {
+		gauge, ok, err := m.storage.GetGauge(ctx, metric.ID)
+		if err != nil {
+			return models.Metric{}, err
+		}
+		if !ok {
 			return models.Metric{}, ErrMetricNotFound
 		}
 		value := float64(gauge)
 		return models.Metric{ID: metric.ID, MType: metric.MType, Value: &value}, nil
 
 	case models.MetricTypeCounter:
-		counter, b := m.storage.GetCounter(metric.ID)
-		if !b {
+		counter, ok, err := m.storage.GetCounter(ctx, metric.ID)
+		if err != nil {
+			return models.Metric{}, err
+		}
+		if !ok {
 			return models.Metric{}, ErrMetricNotFound
 		}
 		delta := int64(counter)
@@ -147,37 +164,53 @@ func (m *MetricService) GetMetricJSON(metric *models.Metric) (models.Metric, err
 	}
 }
 
-func (m *MetricService) updateAndPersist(update func()) error {
+func (m *MetricService) updateAndPersist(ctx context.Context, update func(context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	if m.saveOnUpdate == nil {
-		update()
-		return nil
+		return update(ctx)
 	}
 
 	m.saveMu.Lock()
 	defer m.saveMu.Unlock()
 
-	update()
-	return m.saveOnUpdate(m.storage.Snapshot())
+	if err := update(ctx); err != nil {
+		return err
+	}
+
+	metrics, err := m.storage.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+
+	return m.saveOnUpdate(metrics)
 }
 
-func (m *MetricService) updateMetrics(metrics []models.Metric) {
-	if batchStorage, ok := m.storage.(repository.BatchStorage); ok {
-		batchStorage.UpdateMetrics(metrics)
-		return
+func (m *MetricService) updateMetrics(ctx context.Context, metrics []models.Metric) error {
+	if m.batchStorage != nil {
+		return m.batchStorage.UpdateMetrics(ctx, metrics)
 	}
 
 	for _, metric := range metrics {
-		m.updateMetric(metric)
+		if err := m.updateMetric(ctx, metric); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (m *MetricService) updateMetric(metric models.Metric) {
+func (m *MetricService) updateMetric(ctx context.Context, metric models.Metric) error {
 	switch metric.MType {
 	case models.MetricTypeGauge:
-		m.storage.UpdateGauge(metric.ID, models.Gauge(*metric.Value))
+		return m.storage.UpdateGauge(ctx, metric.ID, models.Gauge(*metric.Value))
 	case models.MetricTypeCounter:
-		m.storage.UpdateCounter(metric.ID, models.Counter(*metric.Delta))
+		return m.storage.UpdateCounter(ctx, metric.ID, models.Counter(*metric.Delta))
 	}
+
+	return ErrUnknownMetricType
 }
 
 func validateMetric(metric models.Metric) error {

@@ -1,6 +1,7 @@
 package mem_storage
 
 import (
+	"context"
 	"testing"
 
 	models "github.com/tomkqwe/metrics/internal/model"
@@ -9,9 +10,12 @@ import (
 func TestMemStorageUpdateGauge(t *testing.T) {
 	storage := NewMemStorage()
 
-	storage.UpdateGauge("Alloc", models.Gauge(12.5))
+	mustNoError(t, storage.UpdateGauge(context.Background(), "Alloc", models.Gauge(12.5)))
 
-	value, ok := storage.GetGauge("Alloc")
+	value, ok, err := storage.GetGauge(context.Background(), "Alloc")
+	if err != nil {
+		t.Fatalf("GetGauge() error = %v", err)
+	}
 	if !ok {
 		t.Fatal("gauge metric Alloc was not stored")
 	}
@@ -23,9 +27,12 @@ func TestMemStorageUpdateGauge(t *testing.T) {
 func TestMemStorageUpdateCounter(t *testing.T) {
 	storage := NewMemStorage()
 
-	storage.UpdateCounter("PollCount", models.Counter(3))
+	mustNoError(t, storage.UpdateCounter(context.Background(), "PollCount", models.Counter(3)))
 
-	value, ok := storage.GetCounter("PollCount")
+	value, ok, err := storage.GetCounter(context.Background(), "PollCount")
+	if err != nil {
+		t.Fatalf("GetCounter() error = %v", err)
+	}
 	if !ok {
 		t.Fatal("counter metric PollCount was not stored")
 	}
@@ -37,15 +44,15 @@ func TestMemStorageUpdateCounter(t *testing.T) {
 func TestMemStorageUpdateReplacesGaugeAndAccumulatesCounter(t *testing.T) {
 	storage := NewMemStorage()
 
-	storage.UpdateGauge("Alloc", models.Gauge(12.5))
-	storage.UpdateGauge("Alloc", models.Gauge(25.5))
-	storage.UpdateCounter("PollCount", models.Counter(3))
-	storage.UpdateCounter("PollCount", models.Counter(5))
+	mustNoError(t, storage.UpdateGauge(context.Background(), "Alloc", models.Gauge(12.5)))
+	mustNoError(t, storage.UpdateGauge(context.Background(), "Alloc", models.Gauge(25.5)))
+	mustNoError(t, storage.UpdateCounter(context.Background(), "PollCount", models.Counter(3)))
+	mustNoError(t, storage.UpdateCounter(context.Background(), "PollCount", models.Counter(5)))
 
-	if value, _ := storage.GetGauge("Alloc"); value != models.Gauge(25.5) {
+	if value, _, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || value != models.Gauge(25.5) {
 		t.Fatalf("gauge metric Alloc = %v, want %v", value, models.Gauge(25.5))
 	}
-	if value, _ := storage.GetCounter("PollCount"); value != models.Counter(8) {
+	if value, _, err := storage.GetCounter(context.Background(), "PollCount"); err != nil || value != models.Counter(8) {
 		t.Fatalf("counter metric PollCount = %v, want %v", value, models.Counter(8))
 	}
 }
@@ -57,7 +64,7 @@ func TestMemStorageUpdateMetrics(t *testing.T) {
 	counterDelta := int64(3)
 	updatedCounterDelta := int64(5)
 
-	storage.UpdateMetrics([]models.Metric{
+	mustNoError(t, storage.UpdateMetrics(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -78,12 +85,12 @@ func TestMemStorageUpdateMetrics(t *testing.T) {
 			MType: models.MetricTypeCounter,
 			Delta: &updatedCounterDelta,
 		},
-	})
+	}))
 
-	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(25.5) {
+	if value, ok, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || !ok || value != models.Gauge(25.5) {
 		t.Fatalf("GetGauge() = %v, %v, want 25.5, true", value, ok)
 	}
-	if value, ok := storage.GetCounter("PollCount"); !ok || value != models.Counter(8) {
+	if value, ok, err := storage.GetCounter(context.Background(), "PollCount"); err != nil || !ok || value != models.Counter(8) {
 		t.Fatalf("GetCounter() = %v, %v, want 8, true", value, ok)
 	}
 }
@@ -91,10 +98,10 @@ func TestMemStorageUpdateMetrics(t *testing.T) {
 func TestMemStorageGetUnknownMetric(t *testing.T) {
 	storage := NewMemStorage()
 
-	if _, ok := storage.GetGauge("UnknownGauge"); ok {
+	if _, ok, err := storage.GetGauge(context.Background(), "UnknownGauge"); err != nil || ok {
 		t.Fatal("GetGauge() ok = true, want false")
 	}
-	if _, ok := storage.GetCounter("UnknownCounter"); ok {
+	if _, ok, err := storage.GetCounter(context.Background(), "UnknownCounter"); err != nil || ok {
 		t.Fatal("GetCounter() ok = true, want false")
 	}
 }
@@ -102,10 +109,13 @@ func TestMemStorageGetUnknownMetric(t *testing.T) {
 func TestMemStorageSnapshot(t *testing.T) {
 	storage := NewMemStorage()
 
-	storage.UpdateGauge("Alloc", models.Gauge(12.5))
-	storage.UpdateCounter("PollCount", models.Counter(3))
+	mustNoError(t, storage.UpdateGauge(context.Background(), "Alloc", models.Gauge(12.5)))
+	mustNoError(t, storage.UpdateCounter(context.Background(), "PollCount", models.Counter(3)))
 
-	snapshot := storage.Snapshot()
+	snapshot, err := storage.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
 	if len(snapshot) != 2 {
 		t.Fatalf("Snapshot() len = %d, want 2", len(snapshot))
 	}
@@ -120,5 +130,12 @@ func TestMemStorageSnapshot(t *testing.T) {
 	}
 	if metric := byName["PollCount"]; metric.MType != models.MetricTypeCounter || metric.Delta == nil || *metric.Delta != 3 {
 		t.Fatalf("Snapshot() PollCount = %+v, want counter delta 3", metric)
+	}
+}
+
+func mustNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

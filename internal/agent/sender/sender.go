@@ -44,7 +44,11 @@ func NewHTTPSenderWithClient(baseURL string, client *http.Client) *HTTPSender {
 	}
 }
 
-func (s *HTTPSender) Send(metrics []models.Metric) error {
+func (s *HTTPSender) Send(ctx context.Context, metrics []models.Metric) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	for _, metric := range metrics {
 		if err := validateMetric(metric); err != nil {
 			return err
@@ -60,13 +64,17 @@ func (s *HTTPSender) Send(metrics []models.Metric) error {
 		return err
 	}
 
-	return retry.DoWithDelays(context.Background(), s.retryDelays, func() error {
-		return s.sendCompressedBody(body)
+	return retry.DoWithDelays(ctx, s.retryDelays, func() error {
+		return s.sendCompressedBody(ctx, body)
 	}, isRetriableSendError)
 }
 
-func (s *HTTPSender) sendCompressedBody(body []byte) error {
-	req, err := http.NewRequest(http.MethodPost, s.metricsURL(), bytes.NewReader(body))
+func (s *HTTPSender) sendCompressedBody(ctx context.Context, body []byte) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.metricsURL(), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

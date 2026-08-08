@@ -7,12 +7,13 @@ import (
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 
 	"github.com/tomkqwe/metrics/internal/postgreserr"
 	"github.com/tomkqwe/metrics/internal/retry"
+	"github.com/tomkqwe/metrics/migrations"
 
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 )
 
@@ -28,7 +29,12 @@ func RunMigrations(dsn string) error {
 	if dsn == "" {
 		return nil
 	}
-	m, err := migrate.New("file://./migrations", dsn)
+	sourceDriver, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("failed to create migration source: %w", err)
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", sourceDriver, dsn)
 	if err != nil {
 		return fmt.Errorf("failed to create migration: %w", err)
 	}

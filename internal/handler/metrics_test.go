@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -86,7 +87,7 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 			name:       "service error",
 			method:     http.MethodPost,
 			path:       "/update/gauge/Alloc/not-float",
-			serviceErr: errors.New("service error"),
+			serviceErr: service.ErrInvalidMetricValue,
 			wantStatus: http.StatusBadRequest,
 			wantCalled: true,
 		},
@@ -139,7 +140,7 @@ func TestMetricsHandlerGetMetricValueSuccess(t *testing.T) {
 }
 
 func TestMetricsHandlerGetMetricValueReturnsNotFound(t *testing.T) {
-	service := &fakeService{getErr: errors.New("not found")}
+	service := &fakeService{getErr: service.ErrMetricNotFound}
 	handler, err := NewMetricsHandler(service)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
@@ -507,6 +508,7 @@ type fakeService struct {
 	getValue              string
 	getErr                error
 	metrics               []models.Metric
+	metricsErr            error
 	updateJSONCalled      bool
 	updateJSONMetric      models.Metric
 	updateJSONErr         error
@@ -519,7 +521,7 @@ type fakeService struct {
 	getJSONErr            error
 }
 
-func (s *fakeService) UpdateMetric(metricType, metricName, value string) error {
+func (s *fakeService) UpdateMetric(_ context.Context, metricType, metricName, value string) error {
 	s.called = true
 	s.metricType = metricType
 	s.metricName = metricName
@@ -528,18 +530,18 @@ func (s *fakeService) UpdateMetric(metricType, metricName, value string) error {
 	return s.err
 }
 
-func (s *fakeService) GetMetricValue(metricType, metricName string) (string, error) {
+func (s *fakeService) GetMetricValue(_ context.Context, metricType, metricName string) (string, error) {
 	s.getMetricType = metricType
 	s.getMetricName = metricName
 
 	return s.getValue, s.getErr
 }
 
-func (s *fakeService) ListMetrics() []models.Metric {
-	return s.metrics
+func (s *fakeService) ListMetrics(_ context.Context) ([]models.Metric, error) {
+	return s.metrics, s.metricsErr
 }
 
-func (s *fakeService) UpdateMetricJSON(metric *models.Metric) error {
+func (s *fakeService) UpdateMetricJSON(_ context.Context, metric *models.Metric) error {
 	s.updateJSONCalled = true
 	if metric != nil {
 		s.updateJSONMetric = *metric
@@ -548,14 +550,14 @@ func (s *fakeService) UpdateMetricJSON(metric *models.Metric) error {
 	return s.updateJSONErr
 }
 
-func (s *fakeService) UpdateMetricsJSON(metrics []models.Metric) error {
+func (s *fakeService) UpdateMetricsJSON(_ context.Context, metrics []models.Metric) error {
 	s.updateJSONBatchCalled = true
 	s.updateJSONBatch = append([]models.Metric(nil), metrics...)
 
 	return s.updateJSONBatchErr
 }
 
-func (s *fakeService) GetMetricJSON(metric *models.Metric) (models.Metric, error) {
+func (s *fakeService) GetMetricJSON(_ context.Context, metric *models.Metric) (models.Metric, error) {
 	s.getJSONCalled = true
 	if metric != nil {
 		s.getJSONMetric = *metric

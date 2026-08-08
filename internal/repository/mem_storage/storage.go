@@ -1,6 +1,7 @@
 package mem_storage
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -20,20 +21,22 @@ func NewMemStorage() *Storage {
 	}
 }
 
-func (s *Storage) UpdateGauge(name string, value models.Gauge) {
+func (s *Storage) UpdateGauge(_ context.Context, name string, value models.Gauge) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.gaugeStore[name] = value
+	return nil
 }
 
-func (s *Storage) UpdateCounter(name string, value models.Counter) {
+func (s *Storage) UpdateCounter(_ context.Context, name string, value models.Counter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.counterStore[name] += value
+	return nil
 }
 
-func (s *Storage) UpdateMetrics(metrics []models.Metric) {
+func (s *Storage) UpdateMetrics(_ context.Context, metrics []models.Metric) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -49,25 +52,26 @@ func (s *Storage) UpdateMetrics(metrics []models.Metric) {
 			}
 		}
 	}
+	return nil
 }
 
-func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
+func (s *Storage) GetGauge(_ context.Context, name string) (models.Gauge, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	value, ok := s.gaugeStore[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (s *Storage) GetCounter(name string) (models.Counter, bool) {
+func (s *Storage) GetCounter(_ context.Context, name string) (models.Counter, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	value, ok := s.counterStore[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (s *Storage) Snapshot() []models.Metric {
+func (s *Storage) Snapshot(_ context.Context) ([]models.Metric, error) {
 	s.mu.RLock()
 	metrics := make([]models.Metric, 0, len(s.gaugeStore)+len(s.counterStore))
 	for name, value := range s.gaugeStore {
@@ -95,5 +99,5 @@ func (s *Storage) Snapshot() []models.Metric {
 		return metrics[i].MType < metrics[j].MType
 	})
 
-	return metrics
+	return metrics, nil
 }

@@ -8,21 +8,16 @@ import (
 	"sort"
 	"time"
 
-	"go.uber.org/zap"
-
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/postgreserr"
 	"github.com/tomkqwe/metrics/internal/repository"
 	"github.com/tomkqwe/metrics/internal/retry"
 )
 
-const (
-	logFieldMetric = "metric"
-	logFieldValue  = "value"
-)
-
 var _ repository.Storage = (*Storage)(nil)
 var _ repository.BatchStorage = (*Storage)(nil)
+
+var errNilDatabase = errors.New("postgres storage database is nil")
 
 const (
 	upsertGaugeQuery = `
@@ -41,86 +36,70 @@ const (
 
 type Storage struct {
 	db          *sql.DB
-	log         *zap.Logger
 	retryDelays []time.Duration
 }
 
 func NewPgStorage(db *sql.DB) *Storage {
-	return NewPgStorageWithLogger(db, nil)
-}
-
-func NewPgStorageWithLogger(db *sql.DB, logger *zap.Logger) *Storage {
-	if logger == nil {
-		logger = zap.NewNop()
-	}
-
 	return &Storage{
 		db:          db,
-		log:         logger,
 		retryDelays: retry.DefaultDelays(),
 	}
 }
 
-func (s *Storage) UpdateGauge(name string, value models.Gauge) {
-	if !s.ready("failed to update gauge") {
-		return
+func (s *Storage) UpdateGauge(ctx context.Context, name string, value models.Gauge) error {
+	if err := s.ready(); err != nil {
+		return err
 	}
 
-	err := s.executeWithRetry(context.Background(), func(ctx context.Context) error {
+	if err := s.executeWithRetry(ctx, func(ctx context.Context) error {
 		_, err := s.db.ExecContext(ctx, upsertGaugeQuery, name, float64(value))
 		return err
-	})
-	if err != nil {
-		s.logger().Error("failed to update gauge",
-			zap.Error(err),
-			zap.String(logFieldMetric, name),
-			zap.Float64(logFieldValue, float64(value)),
-		)
+	}); err != nil {
+		return fmt.Errorf("update gauge %q: %w", name, err)
 	}
+
+	return nil
 }
 
-func (s *Storage) UpdateCounter(name string, value models.Counter) {
-	if !s.ready("failed to update counter") {
-		return
+func (s *Storage) UpdateCounter(ctx context.Context, name string, value models.Counter) error {
+	if err := s.ready(); err != nil {
+		return err
 	}
 
-	err := s.executeWithRetry(context.Background(), func(ctx context.Context) error {
+	if err := s.executeWithRetry(ctx, func(ctx context.Context) error {
 		_, err := s.db.ExecContext(ctx, upsertCounterQuery, name, int64(value))
 		return err
-	})
-	if err != nil {
-		s.logger().Error("failed to update counter",
-			zap.Error(err),
-			zap.String(logFieldMetric, name),
-			zap.Int64(logFieldValue, int64(value)),
-		)
+	}); err != nil {
+		return fmt.Errorf("update counter %q: %w", name, err)
 	}
+
+	return nil
 }
 
-func (s *Storage) UpdateMetrics(metrics []models.Metric) {
+func (s *Storage) UpdateMetrics(ctx context.Context, metrics []models.Metric) error {
 	if len(metrics) == 0 {
-		return
+		return nil
 	}
-	if !s.ready("failed to update metrics batch") {
-		return
+	if err := s.ready(); err != nil {
+		return err
 	}
 
-	ctx := context.Background()
 	if err := s.executeWithRetry(ctx, func(ctx context.Context) error {
 		return s.updateMetricsOnce(ctx, metrics)
 	}); err != nil {
-		s.logger().Error("failed to update metrics batch", zap.Error(err))
-		return
+		return fmt.Errorf("update metrics batch: %w", err)
 	}
+
+	return nil
 }
 
-func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
-	if !s.ready("failed to get gauge") {
-		return 0, false
+func (s *Storage) GetGauge(ctx context.Context, name string) (models.Gauge, bool, error) {
+	if err := s.ready(); err != nil {
+		return 0, false, err
 	}
 
 	var value float64
-	err := s.executeWithRetry(context.Background(), func(ctx context.Context) error {
+	err := s.executeWithRetry(ctx, func(ctx context.Context) error {
 		return s.db.QueryRowContext(ctx, `
 			SELECT value
 			FROM gauges
@@ -128,26 +107,22 @@ func (s *Storage) GetGauge(name string) (models.Gauge, bool) {
 		`, name).Scan(&value)
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false
+		return 0, false, nil
 	}
 	if err != nil {
-		s.logger().Error("failed to get gauge",
-			zap.Error(err),
-			zap.String(logFieldMetric, name),
-		)
-		return 0, false
+		return 0, false, fmt.Errorf("get gauge %q: %w", name, err)
 	}
 
-	return models.Gauge(value), true
+	return models.Gauge(value), true, nil
 }
 
-func (s *Storage) GetCounter(name string) (models.Counter, bool) {
-	if !s.ready("failed to get counter") {
-		return 0, false
+func (s *Storage) GetCounter(ctx context.Context, name string) (models.Counter, bool, error) {
+	if err := s.ready(); err != nil {
+		return 0, false, err
 	}
 
 	var value int64
-	err := s.executeWithRetry(context.Background(), func(ctx context.Context) error {
+	err := s.executeWithRetry(ctx, func(ctx context.Context) error {
 		return s.db.QueryRowContext(ctx, `
 			SELECT value
 			FROM counters
@@ -155,49 +130,37 @@ func (s *Storage) GetCounter(name string) (models.Counter, bool) {
 		`, name).Scan(&value)
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, false
+		return 0, false, nil
 	}
 	if err != nil {
-		s.logger().Error("failed to get counter",
-			zap.Error(err),
-			zap.String(logFieldMetric, name),
-		)
-		return 0, false
+		return 0, false, fmt.Errorf("get counter %q: %w", name, err)
 	}
 
-	return models.Counter(value), true
+	return models.Counter(value), true, nil
 }
 
-func (s *Storage) Snapshot() []models.Metric {
-	if !s.ready("failed to snapshot metrics") {
-		return nil
+func (s *Storage) Snapshot(ctx context.Context) ([]models.Metric, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
 	}
 
-	ctx := context.Background()
-	metrics := make([]models.Metric, 0)
+	var metrics []models.Metric
+	if err := s.executeWithRetry(ctx, func(ctx context.Context) error {
+		gauges, err := s.snapshotGauges(ctx)
+		if err != nil {
+			return err
+		}
 
-	var gauges []models.Metric
-	err := s.executeWithRetry(ctx, func(ctx context.Context) error {
-		var err error
-		gauges, err = s.snapshotGauges(ctx)
-		return err
-	})
-	if err != nil {
-		s.logger().Error("failed to snapshot gauges", zap.Error(err))
-	} else {
-		metrics = append(metrics, gauges...)
-	}
+		counters, err := s.snapshotCounters(ctx)
+		if err != nil {
+			return err
+		}
 
-	var counters []models.Metric
-	err = s.executeWithRetry(ctx, func(ctx context.Context) error {
-		var err error
-		counters, err = s.snapshotCounters(ctx)
-		return err
-	})
-	if err != nil {
-		s.logger().Error("failed to snapshot counters", zap.Error(err))
-	} else {
+		metrics = append(metrics[:0], gauges...)
 		metrics = append(metrics, counters...)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("snapshot metrics: %w", err)
 	}
 
 	sort.Slice(metrics, func(i, j int) bool {
@@ -207,7 +170,7 @@ func (s *Storage) Snapshot() []models.Metric {
 		return metrics[i].MType < metrics[j].MType
 	})
 
-	return metrics
+	return metrics, nil
 }
 
 func (s *Storage) snapshotGauges(ctx context.Context) (metrics []models.Metric, err error) {
@@ -284,7 +247,7 @@ func (s *Storage) snapshotCounters(ctx context.Context) (metrics []models.Metric
 	return metrics, nil
 }
 
-func (s *Storage) updateMetricsOnce(ctx context.Context, metrics []models.Metric) error {
+func (s *Storage) updateMetricsOnce(ctx context.Context, metrics []models.Metric) (err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin metrics batch transaction: %w", err)
@@ -294,7 +257,7 @@ func (s *Storage) updateMetricsOnce(ctx context.Context, metrics []models.Metric
 	defer func() {
 		if !committed {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
-				s.logger().Error("failed to rollback metrics batch transaction", zap.Error(rollbackErr))
+				err = errors.Join(err, fmt.Errorf("rollback metrics batch transaction: %w", rollbackErr))
 			}
 		}
 	}()
@@ -337,24 +300,19 @@ func updateMetricTx(ctx context.Context, tx *sql.Tx, metric models.Metric) error
 }
 
 func (s *Storage) executeWithRetry(ctx context.Context, operation func(context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	return retry.DoWithDelays(ctx, s.retryDelays, func() error {
 		return operation(ctx)
 	}, postgreserr.IsConnectionException)
 }
 
-func (s *Storage) ready(message string) bool {
+func (s *Storage) ready() error {
 	if s != nil && s.db != nil {
-		return true
+		return nil
 	}
 
-	s.logger().Error(message, zap.Error(errors.New("postgres storage database is nil")))
-	return false
-}
-
-func (s *Storage) logger() *zap.Logger {
-	if s == nil || s.log == nil {
-		return zap.NewNop()
-	}
-
-	return s.log
+	return errNilDatabase
 }

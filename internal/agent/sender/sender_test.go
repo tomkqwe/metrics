@@ -2,6 +2,7 @@ package sender
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -49,7 +50,7 @@ func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	counterValue := int64(3)
 	s := NewHTTPSender(server.URL)
 
-	err := s.Send([]models.Metric{
+	err := s.Send(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -98,10 +99,10 @@ func TestHTTPSenderSendSkipsEmptyBatch(t *testing.T) {
 	defer server.Close()
 
 	s := NewHTTPSender(server.URL)
-	if err := s.Send(nil); err != nil {
+	if err := s.Send(context.Background(), nil); err != nil {
 		t.Fatalf("Send(nil) error = %v", err)
 	}
-	if err := s.Send([]models.Metric{}); err != nil {
+	if err := s.Send(context.Background(), []models.Metric{}); err != nil {
 		t.Fatalf("Send(empty) error = %v", err)
 	}
 
@@ -129,7 +130,7 @@ func TestHTTPSenderRetriesTransportErrors(t *testing.T) {
 	s.retryDelays = []time.Duration{0, 0, 0}
 
 	value := 12.5
-	err := s.Send([]models.Metric{
+	err := s.Send(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -155,7 +156,7 @@ func TestHTTPSenderStopsAfterRetryLimit(t *testing.T) {
 	s.retryDelays = []time.Duration{0, 0, 0}
 
 	value := 12.5
-	err := s.Send([]models.Metric{
+	err := s.Send(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -179,7 +180,7 @@ func TestHTTPSenderSendReturnsErrorOnUnexpectedStatusCode(t *testing.T) {
 	value := 12.5
 	s := NewHTTPSender(server.URL)
 
-	err := s.Send([]models.Metric{
+	err := s.Send(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -223,7 +224,7 @@ func TestHTTPSenderSendReturnsErrorForInvalidMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := s.Send([]models.Metric{tt.metric})
+			err := s.Send(context.Background(), []models.Metric{tt.metric})
 			if !errors.Is(err, ErrInvalidMetric) {
 				t.Fatalf("Send() error = %v, want ErrInvalidMetric", err)
 			}

@@ -42,12 +42,14 @@ type config struct {
 func main() {
 	cfg, err := parseConfig(os.Args[1:])
 	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "parse config: %v\n", err)
 		os.Exit(1)
 	}
 
 	logger, err := zap.NewProduction()
 	if err != nil {
-		panic(err)
+		_, _ = fmt.Fprintf(os.Stderr, "create logger: %v\n", err)
+		os.Exit(1)
 	}
 	defer func() {
 		_ = logger.Sync()
@@ -55,7 +57,7 @@ func main() {
 
 	db, err := database.OpenPostgres(cfg.DatabaseDSN)
 	if err != nil {
-		panic(err)
+		logger.Fatal("open postgres", zap.Error(err))
 	}
 	if db != nil {
 		defer func() {
@@ -64,12 +66,12 @@ func main() {
 	}
 
 	if err := database.RunMigrations(cfg.DatabaseDSN); err != nil {
-		panic(err)
+		logger.Fatal("run database migrations", zap.Error(err))
 	}
 
-	storage, fileStorage, err := newServerStorage(cfg, db, logger)
+	storage, fileStorage, err := newServerStorage(cfg, db)
 	if err != nil {
-		panic(err)
+		logger.Fatal("create server storage", zap.Error(err))
 	}
 
 	serviceOptions := make([]service.MetricServiceOption, 0, 1)
@@ -79,7 +81,7 @@ func main() {
 
 	metricService, err := service.NewMetricService(storage, serviceOptions...)
 	if err != nil {
-		panic(err)
+		logger.Fatal("create metric service", zap.Error(err))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,10 +90,10 @@ func main() {
 
 	handler, err := newServerHandler(logger, metricService, db)
 	if err != nil {
-		panic(err)
+		logger.Fatal("create server handler", zap.Error(err))
 	}
 	if err := http.ListenAndServe(cfg.ServerAddress, handler); err != nil {
-		panic(err)
+		logger.Fatal("listen and serve", zap.Error(err))
 	}
 }
 
@@ -185,13 +187,13 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	return router, nil
 }
 
-func newServerStorage(cfg config, db *sql.DB, logger *zap.Logger) (repository.Storage, *file_storage.FileStorage, error) {
+func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *file_storage.FileStorage, error) {
 	if cfg.DatabaseDSN != "" {
 		if db == nil {
 			return nil, nil, fmt.Errorf("postgres database is nil")
 		}
 
-		return postgres.NewPgStorageWithLogger(db, logger), nil, nil
+		return postgres.NewPgStorage(db), nil, nil
 	}
 
 	storage := mem_storage.NewMemStorage()
@@ -205,7 +207,7 @@ func newServerStorage(cfg config, db *sql.DB, logger *zap.Logger) (repository.St
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := repository.RestoreMetrics(storage, metrics); err != nil {
+		if err := repository.RestoreMetrics(context.Background(), storage, metrics); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -232,7 +234,14 @@ func startPeriodicSave(
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := fileStorage.Save(storage.Snapshot()); err != nil && logger != nil {
+				metrics, err := storage.Snapshot(ctx)
+				if err != nil {
+					if logger != nil {
+						logger.Info("snapshot metrics failed", zap.Error(err))
+					}
+					continue
+				}
+				if err := fileStorage.Save(metrics); err != nil && logger != nil {
 					logger.Info("save metrics failed", zap.Error(err))
 				}
 			}

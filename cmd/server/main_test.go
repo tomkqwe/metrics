@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -127,7 +128,7 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 	storage, restoredFileStorage, err := newServerStorage(config{
 		FileStoragePath: path,
 		Restore:         true,
-	}, nil, nil)
+	}, nil)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
@@ -135,10 +136,10 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 		t.Fatal("file storage = nil, want configured storage")
 	}
 
-	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(12.5) {
+	if value, ok, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || !ok || value != models.Gauge(12.5) {
 		t.Fatalf("GetGauge() = %v, %v, want 12.5, true", value, ok)
 	}
-	if value, ok := storage.GetCounter("PollCount"); !ok || value != models.Counter(3) {
+	if value, ok, err := storage.GetCounter(context.Background(), "PollCount"); err != nil || !ok || value != models.Counter(3) {
 		t.Fatalf("GetCounter() = %v, %v, want 3, true", value, ok)
 	}
 }
@@ -160,18 +161,18 @@ func TestNewServerStorageSkipsRestore(t *testing.T) {
 	storage, _, err := newServerStorage(config{
 		FileStoragePath: path,
 		Restore:         false,
-	}, nil, nil)
+	}, nil)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
 
-	if _, ok := storage.GetGauge("Alloc"); ok {
+	if _, ok, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || ok {
 		t.Fatal("GetGauge() ok = true, want false")
 	}
 }
 
 func TestNewServerStorageUsesMemoryWhenFileStoragePathEmpty(t *testing.T) {
-	storage, fileStorage, err := newServerStorage(config{}, nil, nil)
+	storage, fileStorage, err := newServerStorage(config{}, nil)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
@@ -179,8 +180,10 @@ func TestNewServerStorageUsesMemoryWhenFileStoragePathEmpty(t *testing.T) {
 		t.Fatal("file storage is configured, want nil")
 	}
 
-	storage.UpdateGauge("Alloc", models.Gauge(12.5))
-	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(12.5) {
+	if err := storage.UpdateGauge(context.Background(), "Alloc", models.Gauge(12.5)); err != nil {
+		t.Fatalf("UpdateGauge() error = %v", err)
+	}
+	if value, ok, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || !ok || value != models.Gauge(12.5) {
 		t.Fatalf("GetGauge() = %v, %v, want 12.5, true", value, ok)
 	}
 }
@@ -198,7 +201,7 @@ func TestNewServerStorageUsesPostgresWhenDatabaseDSNConfigured(t *testing.T) {
 		DatabaseDSN:     "postgres://user:pass@localhost:5432/metrics?sslmode=disable",
 		FileStoragePath: filepath.Join(t.TempDir(), "metrics.json"),
 		Restore:         true,
-	}, db, nil)
+	}, db)
 	if err != nil {
 		t.Fatalf("newServerStorage() error = %v", err)
 	}
@@ -213,7 +216,7 @@ func TestNewServerStorageUsesPostgresWhenDatabaseDSNConfigured(t *testing.T) {
 func TestNewServerStorageReturnsErrorWhenDatabaseDSNConfiguredWithoutDB(t *testing.T) {
 	_, _, err := newServerStorage(config{
 		DatabaseDSN: "postgres://user:pass@localhost:5432/metrics?sslmode=disable",
-	}, nil, nil)
+	}, nil)
 	if err == nil {
 		t.Fatal("newServerStorage() error = nil, want error")
 	}

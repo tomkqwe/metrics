@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env"
@@ -44,7 +47,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	app.Run()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	app.Run(ctx)
 }
 
 func parseConfig(args []string) (config, error) {

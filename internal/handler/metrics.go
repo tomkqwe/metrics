@@ -74,9 +74,8 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	err := m.service.UpdateMetric(metricType, metricName, rawValue)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if err := m.service.UpdateMetric(r.Context(), metricType, metricName, rawValue); err != nil {
+		writeServiceError(w, err)
 		return
 	}
 
@@ -100,9 +99,9 @@ func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	value, err := m.service.GetMetricValue(metricType, metricName)
+	value, err := m.service.GetMetricValue(r.Context(), metricType, metricName)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		writeServiceError(w, err)
 		return
 	}
 
@@ -117,8 +116,13 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	err := metricsListTemplate.Execute(w, metricsForView(m.service.ListMetrics()))
+	metrics, err := m.service.ListMetrics(r.Context())
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if err = metricsListTemplate.Execute(w, metricsForView(metrics)); err != nil {
 		log.Printf("render metrics list: %v", err)
 	}
 }
@@ -131,18 +135,14 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if err := m.service.UpdateMetricJSON(&reqBody); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if err := m.service.UpdateMetricJSON(r.Context(), &reqBody); err != nil {
+		writeServiceError(w, err)
 		return
 	}
 
-	metric, err := m.service.GetMetricJSON(&reqBody)
+	metric, err := m.service.GetMetricJSON(r.Context(), &reqBody)
 	if err != nil {
-		if errors.Is(err, service.ErrMetricNotFound) {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusBadRequest)
+		writeServiceError(w, err)
 		return
 	}
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
@@ -161,8 +161,8 @@ func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if err := m.service.UpdateMetricsJSON(reqBody); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+	if err := m.service.UpdateMetricsJSON(r.Context(), reqBody); err != nil {
+		writeServiceError(w, err)
 		return
 	}
 
@@ -176,13 +176,9 @@ func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	metric, err := m.service.GetMetricJSON(&reqBody)
+	metric, err := m.service.GetMetricJSON(r.Context(), &reqBody)
 	if err != nil {
-		if errors.Is(err, service.ErrMetricNotFound) {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusBadRequest)
+		writeServiceError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -221,4 +217,27 @@ func metricValue(metric models.Metric) string {
 	default:
 		return ""
 	}
+}
+
+func writeServiceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrMetricNotFound):
+		w.WriteHeader(http.StatusNotFound)
+	case isBadRequestError(err):
+		w.WriteHeader(http.StatusBadRequest)
+	default:
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func isBadRequestError(err error) bool {
+	if errors.Is(err, service.ErrNilMetric) ||
+		errors.Is(err, service.ErrInvalidMetricName) ||
+		errors.Is(err, service.ErrInvalidMetricValue) ||
+		errors.Is(err, service.ErrUnknownMetricType) {
+		return true
+	}
+
+	var numErr *strconv.NumError
+	return errors.As(err, &numErr)
 }

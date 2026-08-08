@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -21,7 +22,7 @@ func TestMetricServiceUpdateGauge(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetric(models.MetricTypeGauge, "Alloc", "12.5")
+	err = service.UpdateMetric(context.Background(), models.MetricTypeGauge, "Alloc", "12.5")
 	if err != nil {
 		t.Fatalf("UpdateMetric() error = %v", err)
 	}
@@ -44,7 +45,7 @@ func TestMetricServiceUpdateCounter(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetric(models.MetricTypeCounter, "PollCount", "3")
+	err = service.UpdateMetric(context.Background(), models.MetricTypeCounter, "PollCount", "3")
 	if err != nil {
 		t.Fatalf("UpdateMetric() error = %v", err)
 	}
@@ -86,7 +87,7 @@ func TestMetricServiceUpdateMetricReturnsErrorForInvalidValue(t *testing.T) {
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetric(tt.metricType, "MetricName", tt.value)
+			err = service.UpdateMetric(context.Background(), tt.metricType, "MetricName", tt.value)
 			if err == nil {
 				t.Fatal("UpdateMetric() error = nil, want error")
 			}
@@ -104,7 +105,7 @@ func TestMetricServiceUpdateMetricReturnsErrorForUnknownMetricType(t *testing.T)
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetric("unknown", "Alloc", "12.5")
+	err = service.UpdateMetric(context.Background(), "unknown", "Alloc", "12.5")
 	if !errors.Is(err, ErrUnknownMetricType) {
 		t.Fatalf("UpdateMetric() error = %v, want %v", err, ErrUnknownMetricType)
 	}
@@ -149,7 +150,7 @@ func TestMetricServiceGetMetricValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := service.GetMetricValue(tt.metricType, tt.metricName)
+			value, err := service.GetMetricValue(context.Background(), tt.metricType, tt.metricName)
 			if err != nil {
 				t.Fatalf("GetMetricValue() error = %v", err)
 			}
@@ -170,7 +171,7 @@ func TestMetricServiceGetMetricValueReturnsNotFoundForUnknownMetric(t *testing.T
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	_, err = service.GetMetricValue(models.MetricTypeGauge, "Unknown")
+	_, err = service.GetMetricValue(context.Background(), models.MetricTypeGauge, "Unknown")
 	if !errors.Is(err, ErrMetricNotFound) {
 		t.Fatalf("GetMetricValue() error = %v, want %v", err, ErrMetricNotFound)
 	}
@@ -183,7 +184,7 @@ func TestMetricServiceGetMetricValueReturnsErrorForUnknownMetricType(t *testing.
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	_, err = service.GetMetricValue("unknown", "Alloc")
+	_, err = service.GetMetricValue(context.Background(), "unknown", "Alloc")
 	if !errors.Is(err, ErrUnknownMetricType) {
 		t.Fatalf("GetMetricValue() error = %v, want %v", err, ErrUnknownMetricType)
 	}
@@ -205,7 +206,10 @@ func TestMetricServiceListMetrics(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	metrics := service.ListMetrics()
+	metrics, err := service.ListMetrics(context.Background())
+	if err != nil {
+		t.Fatalf("ListMetrics() error = %v", err)
+	}
 	if len(metrics) != 1 {
 		t.Fatalf("ListMetrics() len = %d, want 1", len(metrics))
 	}
@@ -252,7 +256,7 @@ func TestMetricServiceUpdateMetricJSON(t *testing.T) {
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetricJSON(&tt.metric)
+			err = service.UpdateMetricJSON(context.Background(), &tt.metric)
 			if err != nil {
 				t.Fatalf("UpdateMetricJSON() error = %v", err)
 			}
@@ -292,7 +296,7 @@ func TestMetricServiceUpdateMetricsJSON(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetricsJSON([]models.Metric{
+	err = service.UpdateMetricsJSON(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -330,7 +334,7 @@ func TestMetricServiceUpdateMetricsJSONUsesBatchStorage(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetricsJSON([]models.Metric{
+	err = service.UpdateMetricsJSON(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -378,7 +382,7 @@ func TestMetricServiceUpdateMetricsJSONPersistsOnce(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetricsJSON([]models.Metric{
+	err = service.UpdateMetricsJSON(context.Background(), []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -410,7 +414,7 @@ func TestMetricServiceUpdateMetricsJSONSkipsEmptyBatch(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetricsJSON(nil)
+	err = service.UpdateMetricsJSON(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("UpdateMetricsJSON() error = %v", err)
 	}
@@ -442,7 +446,7 @@ func TestMetricServicePersistsAfterSuccessfulUpdate(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetric(models.MetricTypeGauge, "Alloc", "12.5")
+	err = service.UpdateMetric(context.Background(), models.MetricTypeGauge, "Alloc", "12.5")
 	if err != nil {
 		t.Fatalf("UpdateMetric() error = %v", err)
 	}
@@ -464,7 +468,7 @@ func TestMetricServiceReturnsPersisterError(t *testing.T) {
 		t.Fatalf("NewMetricService() error = %v", err)
 	}
 
-	err = service.UpdateMetric(models.MetricTypeCounter, "PollCount", "3")
+	err = service.UpdateMetric(context.Background(), models.MetricTypeCounter, "PollCount", "3")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("UpdateMetric() error = %v, want %v", err, wantErr)
 	}
@@ -521,7 +525,7 @@ func TestMetricServiceUpdateMetricJSONReturnsErrorForInvalidMetric(t *testing.T)
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetricJSON(tt.metric)
+			err = service.UpdateMetricJSON(context.Background(), tt.metric)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("UpdateMetricJSON() error = %v, want %v", err, tt.wantErr)
 			}
@@ -573,7 +577,7 @@ func TestMetricServiceUpdateMetricsJSONReturnsErrorForInvalidMetric(t *testing.T
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			err = service.UpdateMetricsJSON([]models.Metric{
+			err = service.UpdateMetricsJSON(context.Background(), []models.Metric{
 				{
 					ID:    "ValidMetric",
 					MType: models.MetricTypeGauge,
@@ -631,7 +635,7 @@ func TestMetricServiceGetMetricJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			metric, err := service.GetMetricJSON(&tt.metric)
+			metric, err := service.GetMetricJSON(context.Background(), &tt.metric)
 			if err != nil {
 				t.Fatalf("GetMetricJSON() error = %v", err)
 			}
@@ -701,7 +705,7 @@ func TestMetricServiceGetMetricJSONReturnsError(t *testing.T) {
 				t.Fatalf("NewMetricService() error = %v", err)
 			}
 
-			_, err = service.GetMetricJSON(tt.metric)
+			_, err = service.GetMetricJSON(context.Background(), tt.metric)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("GetMetricJSON() error = %v, want %v", err, tt.wantErr)
 			}
@@ -727,35 +731,38 @@ type fakeBatchStorage struct {
 	updateMetrics       []models.Metric
 }
 
-func (s *fakeBatchStorage) UpdateMetrics(metrics []models.Metric) {
+func (s *fakeBatchStorage) UpdateMetrics(_ context.Context, metrics []models.Metric) error {
 	s.updateMetricsCalled = true
 	s.updateMetrics = append([]models.Metric(nil), metrics...)
+	return nil
 }
 
-func (s *fakeStorage) UpdateGauge(name string, value models.Gauge) {
+func (s *fakeStorage) UpdateGauge(_ context.Context, name string, value models.Gauge) error {
 	s.gaugeCalled = true
 	s.gaugeName = name
 	s.gaugeValue = value
+	return nil
 }
 
-func (s *fakeStorage) UpdateCounter(name string, value models.Counter) {
+func (s *fakeStorage) UpdateCounter(_ context.Context, name string, value models.Counter) error {
 	s.counterCalled = true
 	s.counterName = name
 	s.counterValue = value
+	return nil
 }
 
-func (s *fakeStorage) GetGauge(name string) (models.Gauge, bool) {
+func (s *fakeStorage) GetGauge(_ context.Context, name string) (models.Gauge, bool, error) {
 	value, ok := s.gauges[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (s *fakeStorage) GetCounter(name string) (models.Counter, bool) {
+func (s *fakeStorage) GetCounter(_ context.Context, name string) (models.Counter, bool, error) {
 	value, ok := s.counters[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (s *fakeStorage) Snapshot() []models.Metric {
-	return s.snapshot
+func (s *fakeStorage) Snapshot(_ context.Context) ([]models.Metric, error) {
+	return s.snapshot, nil
 }
 
 func ptrFloat64(value float64) *float64 {
