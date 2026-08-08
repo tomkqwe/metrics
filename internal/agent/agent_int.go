@@ -1,13 +1,17 @@
 package agent
 
-import models "github.com/tomkqwe/metrics/internal/model"
+import (
+	"context"
+
+	models "github.com/tomkqwe/metrics/internal/model"
+)
 
 type Collector interface {
 	Collect() []models.Metric
 }
 
 type Sender interface {
-	Send([]models.Metric) error
+	Send(context.Context, []models.Metric) error
 }
 
 type Storage interface {

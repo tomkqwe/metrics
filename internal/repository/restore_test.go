@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+	"github.com/tomkqwe/metrics/internal/repository/mem_storage"
 	"strings"
 	"testing"
 
@@ -8,11 +10,11 @@ import (
 )
 
 func TestRestoreMetrics(t *testing.T) {
-	storage := NewMemStorage()
+	storage := mem_storage.NewMemStorage()
 	gaugeValue := 12.5
 	counterValue := int64(3)
 
-	err := RestoreMetrics(storage, []models.Metric{
+	err := RestoreMetrics(context.Background(), storage, []models.Metric{
 		{
 			ID:    "Alloc",
 			MType: models.MetricTypeGauge,
@@ -28,10 +30,10 @@ func TestRestoreMetrics(t *testing.T) {
 		t.Fatalf("RestoreMetrics() error = %v", err)
 	}
 
-	if value, ok := storage.GetGauge("Alloc"); !ok || value != models.Gauge(12.5) {
+	if value, ok, err := storage.GetGauge(context.Background(), "Alloc"); err != nil || !ok || value != models.Gauge(12.5) {
 		t.Fatalf("GetGauge() = %v, %v, want 12.5, true", value, ok)
 	}
-	if value, ok := storage.GetCounter("PollCount"); !ok || value != models.Counter(3) {
+	if value, ok, err := storage.GetCounter(context.Background(), "PollCount"); err != nil || !ok || value != models.Counter(3) {
 		t.Fatalf("GetCounter() = %v, %v, want 3, true", value, ok)
 	}
 }
@@ -70,7 +72,7 @@ func TestRestoreMetricsReturnsErrorForInvalidMetric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := RestoreMetrics(NewMemStorage(), []models.Metric{tt.metric})
+			err := RestoreMetrics(context.Background(), mem_storage.NewMemStorage(), []models.Metric{tt.metric})
 			if err == nil {
 				t.Fatal("RestoreMetrics() error = nil, want error")
 			}

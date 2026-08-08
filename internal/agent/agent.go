@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
@@ -44,25 +45,40 @@ func (a *Agent) PollOnce() {
 	a.storage.Update(a.collector.Collect())
 }
 
-func (a *Agent) ReportOnce() error {
-	return a.sender.Send(a.storage.Snapshot())
+func (a *Agent) ReportOnce(ctx context.Context) error {
+	return a.sender.Send(ctx, a.storage.Snapshot())
 }
 
-func (a *Agent) Run() {
+func (a *Agent) Run(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	go func() {
 		pollTicker := time.NewTicker(a.pollInterval)
 		defer pollTicker.Stop()
 
-		for ; ; <-pollTicker.C {
+		for {
 			a.PollOnce()
+			select {
+			case <-ctx.Done():
+				return
+			case <-pollTicker.C:
+			}
 		}
 	}()
 
 	reportTicker := time.NewTicker(a.reportInterval)
 	defer reportTicker.Stop()
 
-	for range reportTicker.C {
-		if err := a.ReportOnce(); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-reportTicker.C:
+		}
+
+		if err := a.ReportOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("send metrics: %v", err)
 		}
 	}

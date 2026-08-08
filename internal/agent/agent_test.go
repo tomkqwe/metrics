@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestAgentReportOnceSendsStorageSnapshot(t *testing.T) {
 		t.Fatalf("NewAgent() error = %v", err)
 	}
 
-	err = app.ReportOnce()
+	err = app.ReportOnce(context.Background())
 	if err != nil {
 		t.Fatalf("ReportOnce() error = %v", err)
 	}
@@ -68,7 +69,7 @@ func TestAgentReportOnceReturnsSenderError(t *testing.T) {
 		t.Fatalf("NewAgent() error = %v", err)
 	}
 
-	err = app.ReportOnce()
+	err = app.ReportOnce(context.Background())
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("ReportOnce() error = %v, want %v", err, wantErr)
 	}
@@ -138,7 +139,7 @@ type fakeSender struct {
 	err  error
 }
 
-func (s *fakeSender) Send(metrics []models.Metric) error {
+func (s *fakeSender) Send(_ context.Context, metrics []models.Metric) error {
 	s.sent = metrics
 	return s.err
 }

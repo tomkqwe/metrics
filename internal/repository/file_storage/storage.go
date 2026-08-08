@@ -1,4 +1,4 @@
-package repository
+package file_storage
 
 import (
 	"encoding/json"
