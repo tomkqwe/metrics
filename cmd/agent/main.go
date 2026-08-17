@@ -28,12 +28,14 @@ type config struct {
 	serverAddress  string
 	pollInterval   time.Duration
 	reportInterval time.Duration
+	key            string
 }
 
 type envConfig struct {
 	ServerAddress  string `env:"ADDRESS"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
+	Key            string `env:"KEY"`
 }
 
 func main() {
@@ -64,6 +66,7 @@ func parseConfig(args []string) (config, error) {
 	flags.StringVar(&cfg.serverAddress, "a", defaultServerAddress, "HTTP server address")
 	flags.IntVar(&reportInterval, "r", defaultReportIntervalSeconds, "metrics report interval in seconds")
 	flags.IntVar(&pollInterval, "p", defaultPollIntervalSeconds, "metrics poll interval in seconds")
+	flags.StringVar(&cfg.key, "k", cfg.key, "SHA256 hash key")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
@@ -88,6 +91,9 @@ func parseConfig(args []string) (config, error) {
 	if _, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
 		cfg.reportInterval = time.Duration(eCfg.ReportInterval) * time.Second
 	}
+	if _, ok := os.LookupEnv("KEY"); ok {
+		cfg.key = eCfg.Key
+	}
 
 	return cfg, nil
 }
@@ -96,7 +102,7 @@ func newAgent(cfg config) (*agent.Agent, error) {
 	return agent.NewAgent(
 		collector.NewRuntimeCollector(),
 		storage.NewMemoryStorage(),
-		sender.NewHTTPSender(serverURL(cfg.serverAddress)),
+		sender.NewHTTPSender(serverURL(cfg.serverAddress), sender.WithKey(cfg.key)),
 		cfg.pollInterval,
 		cfg.reportInterval,
 	)

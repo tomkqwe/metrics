@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomkqwe/metrics/internal/signature"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -45,6 +46,155 @@ func TestWithLoggingLogsRequestAndResponseData(t *testing.T) {
 	assertIntField(t, entry.Context, "status", http.StatusCreated)
 	assertIntField(t, entry.Context, "size", len("stored"))
 	assertFieldExists(t, entry.Context, "duration")
+}
+
+func TestWithHashSHA256ValidatesRequestAndRestoresBody(t *testing.T) {
+	const key = "secret"
+	requestBody := []byte(`{"id":"Alloc"}`)
+
+	handler := WithHashSHA256(key)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if !bytes.Equal(body, requestBody) {
+			t.Fatalf("body = %q, want %q", body, requestBody)
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(requestBody))
+	request.Header.Set(signature.Header, signature.Calculate(requestBody, key))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+}
+
+func TestWithHashSHA256AllowsRequestWithoutHashHeader(t *testing.T) {
+	const key = "secret"
+	requestBody := []byte(`{"id":"Alloc"}`)
+	called := false
+
+	handler := WithHashSHA256(key)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if !bytes.Equal(body, requestBody) {
+			t.Fatalf("body = %q, want %q", body, requestBody)
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(requestBody))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Fatal("handler was not called")
+	}
+}
+
+func TestWithHashSHA256RejectsInvalidRequestHash(t *testing.T) {
+	const key = "secret"
+	called := false
+	requestBody := []byte(`{"id":"Alloc"}`)
+
+	handler := WithHashSHA256(key)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+
+	request := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(requestBody))
+	request.Header.Set(signature.Header, "bad")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	if called {
+		t.Fatal("handler was called for invalid hash")
+	}
+	if got, want := response.Header().Get(signature.Header), signature.Calculate(nil, key); got != want {
+		t.Fatalf("%s = %q, want %q", signature.Header, got, want)
+	}
+}
+
+func TestWithHashSHA256SignsResponseBody(t *testing.T) {
+	const key = "secret"
+
+	handler := WithHashSHA256(key)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	request.Header.Set(signature.Header, signature.Calculate(nil, key))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := response.Body.String(); body != "ok" {
+		t.Fatalf("body = %q, want ok", body)
+	}
+	if got, want := response.Header().Get(signature.Header), signature.Calculate(response.Body.Bytes(), key); got != want {
+		t.Fatalf("%s = %q, want %q", signature.Header, got, want)
+	}
+}
+
+func TestWithHashSHA256UsesWireBytesWithGzip(t *testing.T) {
+	const key = "secret"
+	requestBody := `{"id":"Alloc"}`
+	responseBody := `{"status":"ok"}`
+	compressedRequest := compressedBytes(t, requestBody)
+
+	handler := WithHashSHA256(key)(WithGzip(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if string(body) != requestBody {
+			t.Fatalf("body = %q, want %q", body, requestBody)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, responseBody)
+	})))
+
+	request := httptest.NewRequest(http.MethodPost, "/update", bytes.NewReader(compressedRequest))
+	request.Header.Set("Content-Encoding", "gzip")
+	request.Header.Set("Accept-Encoding", "gzip")
+	request.Header.Set(signature.Header, signature.Calculate(compressedRequest, key))
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentEncoding := response.Header().Get("Content-Encoding"); contentEncoding != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", contentEncoding)
+	}
+	if got, want := response.Header().Get(signature.Header), signature.Calculate(response.Body.Bytes(), key); got != want {
+		t.Fatalf("%s = %q, want %q", signature.Header, got, want)
+	}
+	if body := decompressedString(t, response.Body); body != responseBody {
+		t.Fatalf("body = %q, want %q", body, responseBody)
+	}
 }
 
 func TestWithGzipDecompressesRequestBody(t *testing.T) {
@@ -243,6 +393,12 @@ func fieldByKey(fields []zapcore.Field, key string) (zapcore.Field, bool) {
 func compressedString(t *testing.T, value string) io.Reader {
 	t.Helper()
 
+	return bytes.NewReader(compressedBytes(t, value))
+}
+
+func compressedBytes(t *testing.T, value string) []byte {
+	t.Helper()
+
 	var buffer bytes.Buffer
 	writer := gzip.NewWriter(&buffer)
 	_, err := io.WriteString(writer, value)
@@ -253,7 +409,7 @@ func compressedString(t *testing.T, value string) io.Reader {
 		t.Fatalf("close gzip writer: %v", err)
 	}
 
-	return &buffer
+	return buffer.Bytes()
 }
 
 func decompressedString(t *testing.T, body io.Reader) string {

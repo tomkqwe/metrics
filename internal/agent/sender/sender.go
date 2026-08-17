@@ -14,6 +14,7 @@ import (
 
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/retry"
+	"github.com/tomkqwe/metrics/internal/signature"
 )
 
 var (
@@ -26,22 +27,36 @@ type HTTPSender struct {
 	baseURL     string
 	client      *http.Client
 	retryDelays []time.Duration
+	key         string
 }
 
-func NewHTTPSender(baseURL string) *HTTPSender {
-	return NewHTTPSenderWithClient(baseURL, http.DefaultClient)
+type HTTPSenderOption func(*HTTPSender)
+
+func WithKey(key string) HTTPSenderOption {
+	return func(s *HTTPSender) {
+		s.key = key
+	}
 }
 
-func NewHTTPSenderWithClient(baseURL string, client *http.Client) *HTTPSender {
+func NewHTTPSender(baseURL string, opts ...HTTPSenderOption) *HTTPSender {
+	return NewHTTPSenderWithClient(baseURL, http.DefaultClient, opts...)
+}
+
+func NewHTTPSenderWithClient(baseURL string, client *http.Client, opts ...HTTPSenderOption) *HTTPSender {
 	if client == nil {
 		client = http.DefaultClient
 	}
 
-	return &HTTPSender{
+	s := &HTTPSender{
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		client:      client,
 		retryDelays: retry.DefaultDelays(),
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
 }
 
 func (s *HTTPSender) Send(ctx context.Context, metrics []models.Metric) error {
@@ -81,6 +96,9 @@ func (s *HTTPSender) sendCompressedBody(ctx context.Context, body []byte) error 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Accept-Encoding", "gzip")
+	if s.key != "" {
+		req.Header.Set(signature.Header, signature.Calculate(body, s.key))
+	}
 
 	resp, err := s.client.Do(req)
 	if err != nil {
