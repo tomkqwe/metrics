@@ -22,6 +22,7 @@ const (
 	defaultServerAddress         = "localhost:8080"
 	defaultPollIntervalSeconds   = 2
 	defaultReportIntervalSeconds = 10
+	defaultRateLimit             = 1
 )
 
 type config struct {
@@ -29,6 +30,7 @@ type config struct {
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	key            string
+	rateLimit      int
 }
 
 type envConfig struct {
@@ -36,6 +38,7 @@ type envConfig struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	Key            string `env:"KEY"`
+	RateLimit      int    `env:"RATE_LIMIT"`
 }
 
 func main() {
@@ -67,6 +70,7 @@ func parseConfig(args []string) (config, error) {
 	flags.IntVar(&reportInterval, "r", defaultReportIntervalSeconds, "metrics report interval in seconds")
 	flags.IntVar(&pollInterval, "p", defaultPollIntervalSeconds, "metrics poll interval in seconds")
 	flags.StringVar(&cfg.key, "k", cfg.key, "SHA256 hash key")
+	flags.IntVar(&cfg.rateLimit, "l", defaultRateLimit, "maximum number of concurrent outgoing requests")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
@@ -94,6 +98,13 @@ func parseConfig(args []string) (config, error) {
 	if _, ok := os.LookupEnv("KEY"); ok {
 		cfg.key = eCfg.Key
 	}
+	if _, ok := os.LookupEnv("RATE_LIMIT"); ok {
+		cfg.rateLimit = eCfg.RateLimit
+	}
+
+	if cfg.rateLimit <= 0 {
+		return config{}, fmt.Errorf("rate limit must be positive")
+	}
 
 	return cfg, nil
 }
@@ -105,6 +116,8 @@ func newAgent(cfg config) (*agent.Agent, error) {
 		sender.NewHTTPSender(serverURL(cfg.serverAddress), sender.WithKey(cfg.key)),
 		cfg.pollInterval,
 		cfg.reportInterval,
+		agent.WithAdditionalCollector(collector.NewSystemCollector()),
+		agent.WithRateLimit(cfg.rateLimit),
 	)
 }
 

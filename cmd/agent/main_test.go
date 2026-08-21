@@ -26,6 +26,9 @@ func TestParseConfigUsesDefaults(t *testing.T) {
 	if cfg.key != "" {
 		t.Fatalf("key = %q, want empty", cfg.key)
 	}
+	if cfg.rateLimit != defaultRateLimit {
+		t.Fatalf("rateLimit = %d, want %d", cfg.rateLimit, defaultRateLimit)
+	}
 }
 
 func TestParseConfigUsesFlags(t *testing.T) {
@@ -36,6 +39,7 @@ func TestParseConfigUsesFlags(t *testing.T) {
 		"-p", "3",
 		"-r", "15",
 		"-k", "flag-key",
+		"-l", "4",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -53,6 +57,9 @@ func TestParseConfigUsesFlags(t *testing.T) {
 	if cfg.key != "flag-key" {
 		t.Fatalf("key = %q, want flag-key", cfg.key)
 	}
+	if cfg.rateLimit != 4 {
+		t.Fatalf("rateLimit = %d, want 4", cfg.rateLimit)
+	}
 }
 
 func TestParseConfigEnvOverridesFlags(t *testing.T) {
@@ -61,12 +68,14 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	t.Setenv("POLL_INTERVAL", "5")
 	t.Setenv("REPORT_INTERVAL", "20")
 	t.Setenv("KEY", "env-key")
+	t.Setenv("RATE_LIMIT", "7")
 
 	cfg, err := parseConfig([]string{
 		"-a", "localhost:9090",
 		"-p", "3",
 		"-r", "15",
 		"-k", "flag-key",
+		"-l", "4",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -84,12 +93,24 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	if cfg.key != "env-key" {
 		t.Fatalf("key = %q, want env-key", cfg.key)
 	}
+	if cfg.rateLimit != 7 {
+		t.Fatalf("rateLimit = %d, want 7", cfg.rateLimit)
+	}
+}
+
+func TestParseConfigRejectsInvalidRateLimit(t *testing.T) {
+	unsetAgentEnv(t)
+
+	_, err := parseConfig([]string{"-l", "0"})
+	if err == nil {
+		t.Fatal("parseConfig() error = nil, want error")
+	}
 }
 
 func unsetAgentEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY"} {
+	for _, key := range []string{"ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)
