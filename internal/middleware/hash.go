@@ -67,10 +67,12 @@ func readRequestBody(r *http.Request) ([]byte, error) {
 		return nil, nil
 	}
 
-	body, err := io.ReadAll(r.Body)
-	if closeErr := r.Body.Close(); err == nil {
-		err = closeErr
-	}
+	bodyReader := r.Body
+	defer func() {
+		_ = bodyReader.Close()
+	}()
+
+	body, err := io.ReadAll(bodyReader)
 	if err != nil {
 		return nil, err
 	}

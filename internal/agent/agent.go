@@ -20,7 +20,6 @@ var (
 const defaultRateLimit = 1
 
 type Agent struct {
-	collector      Collector
 	collectors     []Collector
 	storage        Storage
 	sender         Sender
@@ -63,7 +62,6 @@ func NewAgent(collector Collector, storage Storage, sender Sender, pollInterval,
 	}
 
 	a := &Agent{
-		collector:      collector,
 		collectors:     []Collector{collector},
 		storage:        storage,
 		sender:         sender,
@@ -95,6 +93,13 @@ func (a *Agent) Run(ctx context.Context) {
 		ctx = context.Background()
 	}
 
+	reportJobs, stopPipeline := a.startPipeline(ctx)
+	defer stopPipeline()
+
+	a.runReportLoop(ctx, reportJobs)
+}
+
+func (a *Agent) startPipeline(ctx context.Context) (chan<- []models.Metric, func()) {
 	reportJobs := make(chan []models.Metric)
 	var wg sync.WaitGroup
 
@@ -103,12 +108,17 @@ func (a *Agent) Run(ctx context.Context) {
 	}
 	a.startReportWorkers(ctx, &wg, reportJobs)
 
-	reportTicker := time.NewTicker(a.reportInterval)
-	defer reportTicker.Stop()
-	defer func() {
+	stop := func() {
 		close(reportJobs)
 		wg.Wait()
-	}()
+	}
+
+	return reportJobs, stop
+}
+
+func (a *Agent) runReportLoop(ctx context.Context, reportJobs chan<- []models.Metric) {
+	reportTicker := time.NewTicker(a.reportInterval)
+	defer reportTicker.Stop()
 
 	for {
 		select {

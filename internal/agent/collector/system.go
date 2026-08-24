@@ -45,15 +45,9 @@ func (c *SystemCollector) Collect() []models.Metric {
 }
 
 func (c *SystemCollector) collectMemory() (*mem.VirtualMemoryStat, error) {
-	if c.virtualMemory != nil {
-		return c.virtualMemory()
-	}
-	return mem.VirtualMemory()
+	return c.virtualMemory()
 }
 
 func (c *SystemCollector) collectCPU() ([]float64, error) {
-	if c.cpuPercent != nil {
-		return c.cpuPercent(0, true)
-	}
-	return cpu.Percent(0, true)
+	return c.cpuPercent(0, true)
 }
