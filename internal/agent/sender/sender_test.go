@@ -13,6 +13,7 @@ import (
 	"time"
 
 	models "github.com/tomkqwe/metrics/internal/model"
+	"github.com/tomkqwe/metrics/internal/signature"
 )
 
 func TestHTTPSenderSendPostsMetrics(t *testing.T) {
@@ -108,6 +109,45 @@ func TestHTTPSenderSendSkipsEmptyBatch(t *testing.T) {
 
 	if requests != 0 {
 		t.Fatalf("requests = %d, want 0", requests)
+	}
+}
+
+func TestHTTPSenderSendAddsHashHeader(t *testing.T) {
+	const key = "secret"
+	var gotHash string
+	var wantHash string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		gotHash = r.Header.Get(signature.Header)
+		wantHash = signature.Calculate(body, key)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	value := 12.5
+	s := NewHTTPSender(server.URL, WithKey(key))
+
+	err := s.Send(context.Background(), []models.Metric{
+		{
+			ID:    "Alloc",
+			MType: models.MetricTypeGauge,
+			Value: &value,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if gotHash == "" {
+		t.Fatalf("%s header is empty", signature.Header)
+	}
+	if gotHash != wantHash {
+		t.Fatalf("%s = %q, want %q", signature.Header, gotHash, wantHash)
 	}
 }
 

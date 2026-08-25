@@ -37,6 +37,7 @@ type config struct {
 	FileStoragePath string        `env:"FILE_STORAGE_PATH"`
 	Restore         bool          `env:"RESTORE"`
 	DatabaseDSN     string        `env:"DATABASE_DSN"`
+	Key             string        `env:"KEY"`
 }
 
 func main() {
@@ -88,7 +89,7 @@ func main() {
 	defer cancel()
 	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
 
-	handler, err := newServerHandler(logger, metricService, db)
+	handler, err := newServerHandler(logger, metricService, db, cfg.Key)
 	if err != nil {
 		logger.Fatal("create server handler", zap.Error(err))
 	}
@@ -111,6 +112,7 @@ func parseConfig(args []string) (config, error) {
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
 	flags.BoolVar(&cfg.Restore, "r", cfg.Restore, "restore metrics from storage file")
 	flags.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL database DSN")
+	flags.StringVar(&cfg.Key, "k", cfg.Key, "SHA256 hash key")
 
 	if err := flags.Parse(args); err != nil {
 		return config{}, err
@@ -164,9 +166,10 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger) (http.Handler, error) {
+func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string) (http.Handler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
+	router.Use(middleware.WithHashSHA256(key))
 	router.Use(middleware.WithGzip)
 
 	metricsHandler, err := handler.NewMetricsHandler(srv)

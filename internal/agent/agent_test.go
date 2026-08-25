@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,6 +32,47 @@ func TestAgentPollOnceUpdatesStorageWithCollectedMetrics(t *testing.T) {
 	}
 	if storage.updatedWith[0].ID != "Alloc" {
 		t.Fatalf("Update() metric ID = %q, want Alloc", storage.updatedWith[0].ID)
+	}
+}
+
+func TestAgentPollOnceUsesAdditionalCollectors(t *testing.T) {
+	firstValue := 12.5
+	secondValue := 40.5
+	storage := &fakeStorage{}
+	app, err := NewAgent(
+		&fakeCollector{metrics: []models.Metric{
+			{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &firstValue,
+			},
+		}},
+		storage,
+		&fakeSender{},
+		time.Second,
+		time.Second,
+		WithAdditionalCollector(&fakeCollector{metrics: []models.Metric{
+			{
+				ID:    "FreeMemory",
+				MType: models.MetricTypeGauge,
+				Value: &secondValue,
+			},
+		}}),
+	)
+	if err != nil {
+		t.Fatalf("NewAgent() error = %v", err)
+	}
+
+	app.PollOnce()
+
+	if len(storage.updatedWith) != 2 {
+		t.Fatalf("Update() metrics len = %d, want 2", len(storage.updatedWith))
+	}
+	if storage.updatedWith[0].ID != "Alloc" {
+		t.Fatalf("first Update() metric ID = %q, want Alloc", storage.updatedWith[0].ID)
+	}
+	if storage.updatedWith[1].ID != "FreeMemory" {
+		t.Fatalf("second Update() metric ID = %q, want FreeMemory", storage.updatedWith[1].ID)
 	}
 }
 
@@ -75,6 +117,53 @@ func TestAgentReportOnceReturnsSenderError(t *testing.T) {
 	}
 }
 
+func TestAgentRunLimitsConcurrentReports(t *testing.T) {
+	value := 12.5
+	sender := &blockingSender{
+		started: make(chan struct{}, 10),
+		release: make(chan struct{}),
+	}
+	app, err := NewAgent(
+		&fakeCollector{},
+		&fakeStorage{snapshot: []models.Metric{
+			{
+				ID:    "Alloc",
+				MType: models.MetricTypeGauge,
+				Value: &value,
+			},
+		}},
+		sender,
+		time.Hour,
+		time.Millisecond,
+		WithRateLimit(2),
+	)
+	if err != nil {
+		t.Fatalf("NewAgent() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		app.Run(ctx)
+		close(done)
+	}()
+
+	waitForStartedReports(t, sender.started, 2)
+	time.Sleep(10 * time.Millisecond)
+
+	if got := sender.maxActive.Load(); got > 2 {
+		t.Fatalf("max active reports = %d, want <= 2", got)
+	}
+
+	cancel()
+	close(sender.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not stop after context cancellation")
+	}
+}
+
 func TestNewAgentReturnsErrorForInvalidDependencies(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -113,6 +202,20 @@ func TestNewAgentReturnsErrorForInvalidDependencies(t *testing.T) {
 	}
 }
 
+func TestNewAgentReturnsErrorForInvalidRateLimit(t *testing.T) {
+	_, err := NewAgent(
+		&fakeCollector{},
+		&fakeStorage{},
+		&fakeSender{},
+		time.Second,
+		time.Second,
+		WithRateLimit(0),
+	)
+	if !errors.Is(err, ErrInvalidRateLimit) {
+		t.Fatalf("NewAgent() error = %v, want %v", err, ErrInvalidRateLimit)
+	}
+}
+
 type fakeCollector struct {
 	metrics []models.Metric
 }
@@ -127,7 +230,7 @@ type fakeStorage struct {
 }
 
 func (s *fakeStorage) Update(metrics []models.Metric) {
-	s.updatedWith = metrics
+	s.updatedWith = append(s.updatedWith, metrics...)
 }
 
 func (s *fakeStorage) Snapshot() []models.Metric {
@@ -142,4 +245,53 @@ type fakeSender struct {
 func (s *fakeSender) Send(_ context.Context, metrics []models.Metric) error {
 	s.sent = metrics
 	return s.err
+}
+
+type blockingSender struct {
+	active    atomic.Int32
+	maxActive atomic.Int32
+	started   chan struct{}
+	release   chan struct{}
+}
+
+func (s *blockingSender) Send(ctx context.Context, _ []models.Metric) error {
+	active := s.active.Add(1)
+	defer s.active.Add(-1)
+	s.storeMaxActive(active)
+
+	select {
+	case s.started <- struct{}{}:
+	default:
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.release:
+		return nil
+	}
+}
+
+func (s *blockingSender) storeMaxActive(active int32) {
+	for {
+		maxActive := s.maxActive.Load()
+		if active <= maxActive {
+			return
+		}
+		if s.maxActive.CompareAndSwap(maxActive, active) {
+			return
+		}
+	}
+}
+
+func waitForStartedReports(t *testing.T, started <-chan struct{}, count int) {
+	t.Helper()
+
+	for i := 0; i < count; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatalf("started reports = %d, want %d", i, count)
+		}
+	}
 }

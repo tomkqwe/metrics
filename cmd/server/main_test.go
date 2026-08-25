@@ -36,6 +36,9 @@ func TestParseConfigUsesDefaults(t *testing.T) {
 	if cfg.DatabaseDSN != "" {
 		t.Fatalf("DatabaseDSN = %q, want empty", cfg.DatabaseDSN)
 	}
+	if cfg.Key != "" {
+		t.Fatalf("Key = %q, want empty", cfg.Key)
+	}
 }
 
 func TestParseConfigUsesFlags(t *testing.T) {
@@ -47,6 +50,7 @@ func TestParseConfigUsesFlags(t *testing.T) {
 		"-f", "/tmp/custom-metrics.json",
 		"-r=false",
 		"-d", "postgres://flag-dsn",
+		"-k", "flag-key",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -67,6 +71,9 @@ func TestParseConfigUsesFlags(t *testing.T) {
 	if cfg.DatabaseDSN != "postgres://flag-dsn" {
 		t.Fatalf("DatabaseDSN = %q, want postgres://flag-dsn", cfg.DatabaseDSN)
 	}
+	if cfg.Key != "flag-key" {
+		t.Fatalf("Key = %q, want flag-key", cfg.Key)
+	}
 }
 
 func TestParseConfigEnvOverridesFlags(t *testing.T) {
@@ -76,6 +83,7 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	t.Setenv("FILE_STORAGE_PATH", "/tmp/env-metrics.json")
 	t.Setenv("RESTORE", "false")
 	t.Setenv("DATABASE_DSN", "postgres://env-dsn")
+	t.Setenv("KEY", "env-key")
 
 	cfg, err := parseConfig([]string{
 		"-a", "localhost:9090",
@@ -83,6 +91,7 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 		"-f", "/tmp/flag-metrics.json",
 		"-r=true",
 		"-d", "postgres://flag-dsn",
+		"-k", "flag-key",
 	})
 	if err != nil {
 		t.Fatalf("parseConfig() error = %v", err)
@@ -102,6 +111,9 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 	}
 	if cfg.DatabaseDSN != "postgres://env-dsn" {
 		t.Fatalf("DatabaseDSN = %q, want postgres://env-dsn", cfg.DatabaseDSN)
+	}
+	if cfg.Key != "env-key" {
+		t.Fatalf("Key = %q, want env-key", cfg.Key)
 	}
 }
 
@@ -225,7 +237,7 @@ func TestNewServerStorageReturnsErrorWhenDatabaseDSNConfiguredWithoutDB(t *testi
 func unsetServerEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN"} {
+	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)
