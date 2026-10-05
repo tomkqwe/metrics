@@ -7,6 +7,9 @@ import (
 	models "github.com/tomkqwe/metrics/internal/model"
 )
 
+// RestoreMetrics applies saved metrics in order, replacing gauges and adding counter values.
+// Use an empty storage to restore a snapshot without doubling existing counters.
+// An error stops restoration; earlier updates are not rolled back.
 func RestoreMetrics(ctx context.Context, storage Storage, metrics []models.Metric) error {
 	if ctx == nil {
 		ctx = context.Background()

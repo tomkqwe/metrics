@@ -9,15 +9,19 @@ import (
 	"github.com/tomkqwe/metrics/internal/retry"
 )
 
+// DatabasePinger checks whether the database can be reached.
 type DatabasePinger interface {
+	// PingContext checks connectivity, observing context cancellation.
 	PingContext(ctx context.Context) error
 }
 
+// PingHandler serves the database health endpoint.
 type PingHandler struct {
 	db          DatabasePinger
 	retryDelays []time.Duration
 }
 
+// NewPingHandler creates a health handler; a nil database makes Ping return 500.
 func NewPingHandler(db DatabasePinger) *PingHandler {
 	return &PingHandler{
 		db:          db,
@@ -25,6 +29,8 @@ func NewPingHandler(db DatabasePinger) *PingHandler {
 	}
 }
 
+// Ping handles GET /ping and returns 200 for a reachable database or 500 otherwise.
+// PostgreSQL connection exceptions are retried with the configured delays.
 func (h *PingHandler) Ping(w http.ResponseWriter, r *http.Request) {
 	if h.db == nil {
 		w.WriteHeader(http.StatusInternalServerError)

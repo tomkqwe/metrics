@@ -174,3 +174,24 @@ Dropped 182 nodes (cum <= 8584.37kB)
 ```
 
 Проверки после изменения: `go test -race ./...`, `go vet ./...`.
+
+## Документация Go и примеры HTTP API
+
+Публичные типы, интерфейсы, функции и методы документированы комментариями godoc.
+Просмотр документации из корня проекта:
+
+```sh
+go doc ./internal/handler
+go doc ./internal/handler.MetricsHandler.UpdateMetricsJSON
+go doc ./internal/service.Service
+```
+
+В `internal/handler/example_test.go` находятся исполняемые примеры обновления метрик
+через URL и JSON, пакетного обновления, чтения значений, HTML-списка и `/ping`,
+а также ответов 400 и 404. Примеры используют настоящие хендлеры и хранилище в памяти;
+для `/ping` проверку соединения заменяет тестовая реализация `DatabasePinger`.
+Внешний HTTP-сервер и PostgreSQL не требуются. Секции `Output` проверяются автоматически:
+
+```sh
+go test ./internal/handler -run Example -v
+```

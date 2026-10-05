@@ -8,14 +8,18 @@ import (
 
 // Event describes the metrics accepted in one request.
 type Event struct {
-	TS        int64    `json:"ts"`
-	Metrics   []string `json:"metrics"`
-	IPAddress string   `json:"ip_address"`
+	// TS is the event time in Unix seconds.
+	TS int64 `json:"ts"`
+	// Metrics contains the names accepted in the request.
+	Metrics []string `json:"metrics"`
+	// IPAddress is the remote connection address without its port.
+	IPAddress string `json:"ip_address"`
 }
 
 // Observer receives an event after metrics have been successfully updated.
 // Implementations must support concurrent calls.
 type Observer interface {
+	// Notify delivers an event and reports a delivery failure, if any.
 	Notify(context.Context, Event) error
 }
 
@@ -25,6 +29,7 @@ type Publisher struct {
 	observers []Observer
 }
 
+// NewPublisher registers observers for subsequent event delivery.
 func NewPublisher(observers ...Observer) *Publisher {
 	return &Publisher{observers: append([]Observer(nil), observers...)}
 }

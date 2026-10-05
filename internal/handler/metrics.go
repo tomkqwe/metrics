@@ -1,3 +1,4 @@
+// Package handler provides HTTP endpoints for metric updates, queries and database health.
 package handler
 
 import (
@@ -18,9 +19,11 @@ import (
 )
 
 var (
+	// ErrServiceInvalid indicates that no metric service was provided.
 	ErrServiceInvalid = errors.New("service is invalid")
 )
 
+// MetricsHandler serves metric update, lookup and listing endpoints using a Service.
 type MetricsHandler struct {
 	service service.Service
 	audit   *audit.Publisher
@@ -55,6 +58,7 @@ var metricsListTemplate = template.Must(template.New("metrics").Parse(`<!DOCTYPE
 </body>
 </html>`))
 
+// NewMetricsHandler creates metric handlers and registers audit observers. A nil service returns ErrServiceInvalid.
 func NewMetricsHandler(srv service.Service, observers ...audit.Observer) (*MetricsHandler, error) {
 	if srv == nil {
 		return nil, ErrServiceInvalid
@@ -65,6 +69,9 @@ func NewMetricsHandler(srv service.Service, observers ...audit.Observer) (*Metri
 	}, nil
 }
 
+// UpdateMetric handles POST /update/{metricType}/{metricName}/{rawValue}.
+// It replaces gauges, increments counters and audits successful updates.
+// Success returns 200; invalid values or types return 400; missing path parameters return 404.
 func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
@@ -92,6 +99,8 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
 }
 
+// GetMetricValue handles GET /value/{metricType}/{metricName}, returning a plain-text value.
+// It returns 404 for a missing metric and 400 for an unsupported type.
 func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
@@ -116,6 +125,7 @@ func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 	_, _ = fmt.Fprint(w, value)
 }
 
+// ListMetrics handles GET / and renders stored metrics as an HTML table.
 func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
@@ -134,6 +144,8 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UpdateMetricJSON handles POST /update/ with a JSON metric and returns its current stored value.
+// Invalid input returns 400; a successful update emits an audit event.
 func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	w.Header().Set("Content-Type", "application/json")
@@ -161,6 +173,9 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// UpdateMetricsJSON handles POST /updates/ with a JSON array of metrics.
+// It returns 200 with an empty body on success and emits one audit event for the batch.
+// Invalid input returns 400; storage failures return 500.
 func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	w.Header().Set("Content-Type", "application/json")
@@ -184,6 +199,8 @@ func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusOK)
 }
 
+// GetMetricJSON handles POST /value/ with a metric ID and type, returning the stored metric as JSON.
+// It returns 404 when the metric does not exist and 400 for invalid input.
 func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var reqBody models.Metric

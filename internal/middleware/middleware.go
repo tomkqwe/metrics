@@ -1,3 +1,4 @@
+// Package middleware provides HTTP logging, signature checking and gzip support.
 package middleware
 
 import (
@@ -34,6 +35,7 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 	return size, err
 }
 
+// WithLogging logs request method, URI, elapsed time, response status and size using logger.
 func WithLogging(logger *zap.Logger) func(http.Handler) http.Handler {
 	if logger == nil {
 		logger = zap.NewNop()

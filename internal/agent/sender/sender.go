@@ -1,3 +1,4 @@
+// Package sender delivers compressed metric batches over HTTP.
 package sender
 
 import (
@@ -18,11 +19,15 @@ import (
 )
 
 var (
-	ErrInvalidMetric        = errors.New("invalid metric")
-	ErrTransport            = errors.New("transport error")
+	// ErrInvalidMetric indicates a missing metric value or unsupported type.
+	ErrInvalidMetric = errors.New("invalid metric")
+	// ErrTransport wraps a failure to perform the HTTP request.
+	ErrTransport = errors.New("transport error")
+	// ErrUnexpectedStatusCode indicates a response other than HTTP 200.
 	ErrUnexpectedStatusCode = errors.New("unexpected status code")
 )
 
+// HTTPSender sends compressed JSON batches to a metric server.
 type HTTPSender struct {
 	baseURL     string
 	client      *http.Client
@@ -30,18 +35,23 @@ type HTTPSender struct {
 	key         string
 }
 
+// HTTPSenderOption configures an HTTP sender.
 type HTTPSenderOption func(*HTTPSender)
 
+// WithKey enables HMAC-SHA256 signing of the compressed request body.
 func WithKey(key string) HTTPSenderOption {
 	return func(s *HTTPSender) {
 		s.key = key
 	}
 }
 
+// NewHTTPSender creates a sender using http.DefaultClient.
 func NewHTTPSender(baseURL string, opts ...HTTPSenderOption) *HTTPSender {
 	return NewHTTPSenderWithClient(baseURL, http.DefaultClient, opts...)
 }
 
+// NewHTTPSenderWithClient creates a sender with a custom HTTP client.
+// A nil client falls back to http.DefaultClient.
 func NewHTTPSenderWithClient(baseURL string, client *http.Client, opts ...HTTPSenderOption) *HTTPSender {
 	if client == nil {
 		client = http.DefaultClient
@@ -59,6 +69,9 @@ func NewHTTPSenderWithClient(baseURL string, client *http.Client, opts ...HTTPSe
 	return s
 }
 
+// Send validates and posts metrics to /updates/ as gzipped JSON.
+// Empty batches are ignored. Transport errors are retried; non-200 responses are returned as errors.
+// A nil context is replaced with context.Background.
 func (s *HTTPSender) Send(ctx context.Context, metrics []models.Metric) error {
 	if ctx == nil {
 		ctx = context.Background()

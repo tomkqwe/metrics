@@ -1,3 +1,4 @@
+// Package memstorage provides a concurrency-safe in-memory metric repository.
 package memstorage
 
 import (
@@ -8,12 +9,14 @@ import (
 	"github.com/tomkqwe/metrics/internal/model"
 )
 
+// Storage is a concurrency-safe in-memory metric repository.
 type Storage struct {
 	mu           sync.RWMutex
 	gaugeStore   map[string]models.Gauge   // name => value
 	counterStore map[string]models.Counter // name => value
 }
 
+// NewMemStorage returns an empty metric repository.
 func NewMemStorage() *Storage {
 	return &Storage{
 		gaugeStore:   make(map[string]models.Gauge),
@@ -21,6 +24,7 @@ func NewMemStorage() *Storage {
 	}
 }
 
+// UpdateGauge sets the named gauge to value.
 func (s *Storage) UpdateGauge(_ context.Context, name string, value models.Gauge) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -29,6 +33,7 @@ func (s *Storage) UpdateGauge(_ context.Context, name string, value models.Gauge
 	return nil
 }
 
+// UpdateCounter adds value to the named counter, creating it if absent.
 func (s *Storage) UpdateCounter(_ context.Context, name string, value models.Counter) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -36,6 +41,8 @@ func (s *Storage) UpdateCounter(_ context.Context, name string, value models.Cou
 	return nil
 }
 
+// UpdateMetrics applies a batch while holding the write lock.
+// Unknown metric types and metrics missing their value are ignored.
 func (s *Storage) UpdateMetrics(_ context.Context, metrics []models.Metric) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -55,6 +62,7 @@ func (s *Storage) UpdateMetrics(_ context.Context, metrics []models.Metric) erro
 	return nil
 }
 
+// GetGauge returns the gauge value and whether it exists.
 func (s *Storage) GetGauge(_ context.Context, name string) (models.Gauge, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -63,6 +71,7 @@ func (s *Storage) GetGauge(_ context.Context, name string) (models.Gauge, bool, 
 	return value, ok, nil
 }
 
+// GetCounter returns the counter value and whether it exists.
 func (s *Storage) GetCounter(_ context.Context, name string) (models.Counter, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -71,6 +80,7 @@ func (s *Storage) GetCounter(_ context.Context, name string) (models.Counter, bo
 	return value, ok, nil
 }
 
+// Snapshot returns an independent snapshot sorted by metric type and name.
 func (s *Storage) Snapshot(_ context.Context) ([]models.Metric, error) {
 	s.mu.RLock()
 	metrics := make([]models.Metric, 0, len(s.gaugeStore)+len(s.counterStore))

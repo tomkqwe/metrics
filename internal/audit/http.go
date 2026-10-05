@@ -16,6 +16,7 @@ type HTTPObserver struct {
 	client *http.Client
 }
 
+// NewHTTPObserver creates an observer for an absolute HTTP(S) URL with a five-second timeout.
 func NewHTTPObserver(address string) (*HTTPObserver, error) {
 	parsed, err := url.Parse(address)
 	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
@@ -27,6 +28,7 @@ func NewHTTPObserver(address string) (*HTTPObserver, error) {
 	}}, nil
 }
 
+// Notify posts an event as JSON and returns an error for transport failures or non-2xx responses.
 func (h *HTTPObserver) Notify(ctx context.Context, event Event) error {
 	body, err := json.Marshal(event)
 	if err != nil {

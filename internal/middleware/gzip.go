@@ -110,6 +110,8 @@ func (w *gzipResponseWriter) shouldCompress() bool {
 	return ok
 }
 
+// WithGzip decompresses gzip request bodies and compresses JSON or HTML responses
+// when the client advertises gzip support. Malformed gzip input returns 400.
 func WithGzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hasEncoding(r.Header.Get("Content-Encoding"), gzipEncoding) {
