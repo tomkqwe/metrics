@@ -1,0 +1,11 @@
+File: metrics-base.test
+Type: alloc_space
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for 1758079232B, 100% of 1758079232B total
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context 	 	 
+----------------------------------------------------------+-------------
+                                       1618408816B   100% |   compress/gzip.(*Writer).Write (inline)
+1331085312B 75.71% 75.71% 1618408816B 92.06%                | compress/flate.NewWriter
+                                        287323504B 17.75% |   compress/flate.(*compressor).init
+----------------------------------------------------------+-------------

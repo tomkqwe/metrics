@@ -1,0 +1,41 @@
+File: metrics-result.test
+Type: inuse_space
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for 1579.34kB, 1327.26% of 118.99kB total
+Dropped 117 nodes (cum <= 0.59kB)
+      flat  flat%   sum%        cum   cum%
+    1296kB 1089.15% 1089.15%  1575.64kB 1324.15%  compress/flate.NewWriter (inline)
+  271.89kB 228.49% 1317.64%   271.89kB 228.49%  compress/flate.(*compressor).initDeflate (inline)
+   13.50kB 11.35% 1328.99%    13.50kB 11.35%  compress/flate.(*huffmanEncoder).generate
+  -10.11kB  8.50% 1320.49%   -10.11kB  8.50%  runtime.mallocgc
+    8.02kB  6.74% 1327.23%     8.02kB  6.74%  io.init.func1
+    0.03kB 0.026% 1327.26%     8.10kB  6.81%  io.copyBuffer
+         0     0% 1327.26%    13.50kB 11.35%  compress/flate.(*Writer).Close (inline)
+         0     0% 1327.26%    13.50kB 11.35%  compress/flate.(*compressor).close
+         0     0% 1327.26%    13.50kB 11.35%  compress/flate.(*compressor).deflate
+         0     0% 1327.26%   279.64kB 235.01%  compress/flate.(*compressor).init
+         0     0% 1327.26%    13.50kB 11.35%  compress/flate.(*compressor).writeBlock
+         0     0% 1327.26%        9kB  7.56%  compress/flate.(*huffmanBitWriter).indexTokens
+         0     0% 1327.26%    13.50kB 11.35%  compress/flate.(*huffmanBitWriter).writeBlock
+         0     0% 1327.26%  1589.14kB 1335.50%  compress/gzip.(*Writer).Close
+         0     0% 1327.26%  1575.64kB 1324.15%  compress/gzip.(*Writer).Write
+         0     0% 1327.26%  1576.55kB 1324.92%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 1327.26%    20.59kB 17.30%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 1327.26%    13.66kB 11.48%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+         0     0% 1327.26%  1575.64kB 1324.15%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close
+         0     0% 1327.26%  1576.31kB 1324.72%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+         0     0% 1327.26%  1575.64kB 1324.15%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 1327.26%    20.62kB 17.33%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 1327.26%     8.05kB  6.77%  io.Copy (inline)
+         0     0% 1327.26%     8.02kB  6.74%  io.discard.ReadFrom
+         0     0% 1327.26%  1578.73kB 1326.75%  net/http.(*conn).serve
+         0     0% 1327.26%  1576.31kB 1324.72%  net/http.HandlerFunc.ServeHTTP
+         0     0% 1327.26%  1576.55kB 1324.92%  net/http.serverHandler.ServeHTTP
+         0     0% 1327.26%    -9.84kB  8.27%  runtime.malg
+         0     0% 1327.26%    -9.84kB  8.27%  runtime.newobject
+         0     0% 1327.26%   -10.09kB  8.48%  runtime.newproc.func1
+         0     0% 1327.26%   -10.09kB  8.48%  runtime.newproc1
+         0     0% 1327.26%   -10.09kB  8.48%  runtime.systemstack
+         0     0% 1327.26%     9.01kB  7.57%  sync.(*Pool).Get
+         0     0% 1327.26%    20.43kB 17.17%  testing.(*B).launch
+         0     0% 1327.26%    20.62kB 17.33%  testing.(*B).runN

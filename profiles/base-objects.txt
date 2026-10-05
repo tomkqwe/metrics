@@ -1,0 +1,114 @@
+File: metrics-base.test
+Type: alloc_objects
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for 401186, 91.13% of 440241 total
+Dropped 385 nodes (cum <= 2201)
+      flat  flat%   sum%        cum   cum%
+    250025 56.79% 56.79%     256770 58.32%  encoding/json.(*decodeState).literalStore
+     14034  3.19% 59.98%      16051  3.65%  net/textproto.readMIMEHeader
+     12036  2.73% 62.71%      12036  2.73%  compress/flate.newHuffmanEncoder (inline)
+      8052  1.83% 64.54%       8052  1.83%  sync.(*Pool).pinSlow
+      8024  1.82% 66.37%      20060  4.56%  compress/flate.newHuffmanBitWriter (inline)
+      8024  1.82% 68.19%       8024  1.82%  reflect.growslice
+      7021  1.59% 69.78%       7021  1.59%  net/textproto.MIMEHeader.Set (inline)
+      6745  1.53% 71.32%       6745  1.53%  reflect.unsafe_New
+      6018  1.37% 72.68%       6018  1.37%  compress/flate.(*huffmanDecoder).init
+      6018  1.37% 74.05%       6018  1.37%  net/http.Header.Clone (inline)
+      5015  1.14% 75.19%      11035  2.51%  encoding/json.(*Decoder).refill
+      4633  1.05% 76.24%       4633  1.05%  bytes.growSlice
+      4074  0.93% 77.17%      18128  4.12%  net/http.(*persistConn).readLoop
+      4027  0.91% 78.08%       4027  0.91%  net/http.(*persistConn).roundTrip
+      4017  0.91% 78.99%       4017  0.91%  strings.genSplit
+      4013  0.91% 79.91%       4013  0.91%  compress/flate.(*compressor).initDeflate (inline)
+      4012  0.91% 80.82%       4012  0.91%  io.LimitReader (inline)
+      4012  0.91% 81.73%      10719  2.43%  net/http.(*Request).write
+      3015  0.68% 82.41%       3021  0.69%  context.withCancel (inline)
+      3011  0.68% 83.10%       6030  1.37%  net/http.(*Transport).getConn
+      3009  0.68% 83.78%       3009  0.68%  compress/flate.(*huffmanEncoder).generate
+      3009  0.68% 84.46%       4013  0.91%  compress/flate.NewReader
+      3009  0.68% 85.15%       3009  0.68%  encoding/json.(*scanner).pushParseState
+      3009  0.68% 85.83%       5015  1.14%  net/http.NewRequestWithContext
+      2012  0.46% 86.29%       4030  0.92%  context.WithCancel
+      2006  0.46% 86.74%      26079  5.92%  compress/flate.NewWriter (inline)
+      2006  0.46% 87.20%     258776 58.78%  encoding/json.(*decodeState).object
+      2006  0.46% 87.65%      27923  6.34%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+      2006  0.46% 88.11%     292917 66.54%  github.com/tomkqwe/metrics/internal/handler.(*MetricsHandler).UpdateMetricsJSON
+      2006  0.46% 88.57%      19207  4.36%  net/http.(*conn).readRequest
+      2006  0.46% 89.02%       4012  0.91%  net/http.readTransfer
+      1235  0.28% 89.30%       5868  1.33%  bytes.(*Buffer).grow
+      1005  0.23% 89.53%     345954 78.58%  net/http.(*conn).serve
+      1004  0.23% 89.76%     319239 72.51%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+      1003  0.23% 89.99%       8026  1.82%  compress/gzip.NewReader (inline)
+      1003  0.23% 90.21%      24106  5.48%  net/http.(*Client).do
+      1003  0.23% 90.44%       4012  0.91%  net/http.(*Client).makeHeadersCopier
+      1003  0.23% 90.67%      18088  4.11%  net/http.(*Transport).roundTrip
+      1003  0.23% 90.90%      12036  2.73%  net/http.ReadResponse
+      1003  0.23% 91.13%      14374  3.27%  net/http.readRequest
+         3 0.00068% 91.13%      10722  2.44%  net/http.(*persistConn).writeLoop
+         3 0.00068% 91.13%      64128 14.57%  testing.(*B).runN
+         2 0.00045% 91.13%       5018  1.14%  compress/gzip.(*Reader).readHeader
+         2 0.00045% 91.13%      64078 14.56%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         1 0.00023% 91.13%       6020  1.37%  compress/gzip.(*Reader).Read
+         1 0.00023% 91.13%      35262  8.01%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).sendCompressedBody
+         1 0.00023% 91.13%       7022  1.60%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).WriteHeader
+         1 0.00023% 91.13%       2876  0.65%  net/http.(*chunkWriter).writeHeader
+         0     0% 91.13%       2876  0.65%  bufio.(*Writer).Flush
+         0     0% 91.13%       5172  1.17%  bytes.(*Buffer).Write
+         0     0% 91.13%       6018  1.37%  compress/flate.(*Writer).Close (inline)
+         0     0% 91.13%       6018  1.37%  compress/flate.(*compressor).close
+         0     0% 91.13%       6018  1.37%  compress/flate.(*compressor).deflate
+         0     0% 91.13%      24073  5.47%  compress/flate.(*compressor).init
+         0     0% 91.13%       6018  1.37%  compress/flate.(*compressor).writeBlock
+         0     0% 91.13%       6018  1.37%  compress/flate.(*decompressor).Read
+         0     0% 91.13%       6018  1.37%  compress/flate.(*decompressor).nextBlock
+         0     0% 91.13%       6018  1.37%  compress/flate.(*decompressor).readHuffman
+         0     0% 91.13%       3009  0.68%  compress/flate.(*huffmanBitWriter).write (inline)
+         0     0% 91.13%       6018  1.37%  compress/flate.(*huffmanBitWriter).writeBlock
+         0     0% 91.13%       3009  0.68%  compress/flate.(*huffmanBitWriter).writeCode
+         0     0% 91.13%       3009  0.68%  compress/flate.(*huffmanBitWriter).writeTokens
+         0     0% 91.13%       7023  1.60%  compress/gzip.(*Reader).Reset
+         0     0% 91.13%      19058  4.33%  compress/gzip.(*Writer).Close
+         0     0% 91.13%      27082  6.15%  compress/gzip.(*Writer).Write
+         0     0% 91.13%     280844 63.79%  encoding/json.(*Decoder).Decode
+         0     0% 91.13%      12988  2.95%  encoding/json.(*Decoder).readValue
+         0     0% 91.13%      18896  4.29%  encoding/json.(*Encoder).Encode
+         0     0% 91.13%     267803 60.83%  encoding/json.(*decodeState).array
+         0     0% 91.13%     267856 60.84%  encoding/json.(*decodeState).unmarshal
+         0     0% 91.13%     267803 60.83%  encoding/json.(*decodeState).value
+         0     0% 91.13%       3052  0.69%  encoding/json.(*encodeState).marshal
+         0     0% 91.13%       3052  0.69%  encoding/json.(*encodeState).reflectValue
+         0     0% 91.13%       2980  0.68%  encoding/json.arrayEncoder.encode
+         0     0% 91.13%       6745  1.53%  encoding/json.indirect
+         0     0% 91.13%       2980  0.68%  encoding/json.sliceEncoder.encode
+         0     0% 91.13%       3009  0.68%  encoding/json.stateBeginValue
+         0     0% 91.13%       2284  0.52%  encoding/json.stringEncoder
+         0     0% 91.13%       2748  0.62%  encoding/json.structEncoder.encode
+         0     0% 91.13%       2436  0.55%  fmt.Fprintf
+         0     0% 91.13%     322492 73.25%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 91.13%     293157 66.59%  github.com/go-chi/chi/v5.(*Mux).routeHTTP
+         0     0% 91.13%      63185 14.35%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 91.13%      35262  8.01%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send.func1
+         0     0% 91.13%      13040  2.96%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close (inline)
+         0     0% 91.13%      13040  2.96%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 91.13%       4012  0.91%  github.com/tomkqwe/metrics/internal/middleware.hasEncoding
+         0     0% 91.13%      35262  8.01%  github.com/tomkqwe/metrics/internal/retry.DoWithDelays
+         0     0% 91.13%      24106  5.48%  net/http.(*Client).Do (inline)
+         0     0% 91.13%      19091  4.34%  net/http.(*Client).send
+         0     0% 91.13%      18088  4.11%  net/http.(*Transport).RoundTrip
+         0     0% 91.13%       2876  0.65%  net/http.(*chunkWriter).Write
+         0     0% 91.13%      12036  2.73%  net/http.(*persistConn).readResponse
+         0     0% 91.13%       3009  0.68%  net/http.(*response).WriteHeader
+         0     0% 91.13%       3216  0.73%  net/http.(*response).finishRequest
+         0     0% 91.13%     319239 72.51%  net/http.HandlerFunc.ServeHTTP
+         0     0% 91.13%       7021  1.59%  net/http.Header.Set (inline)
+         0     0% 91.13%       3009  0.68%  net/http.cloneOrMakeHeader
+         0     0% 91.13%      18088  4.11%  net/http.send
+         0     0% 91.13%     322492 73.25%  net/http.serverHandler.ServeHTTP
+         0     0% 91.13%      16051  3.65%  net/textproto.(*Reader).ReadMIMEHeader (inline)
+         0     0% 91.13%       6745  1.53%  reflect.New
+         0     0% 91.13%       8024  1.82%  reflect.Value.Grow
+         0     0% 91.13%       8024  1.82%  reflect.Value.grow
+         0     0% 91.13%       4017  0.91%  strings.Split (inline)
+         0     0% 91.13%       7647  1.74%  sync.(*Pool).Get
+         0     0% 91.13%       8052  1.83%  sync.(*Pool).pin
+         0     0% 91.13%      63403 14.40%  testing.(*B).launch

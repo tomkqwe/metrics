@@ -1,0 +1,80 @@
+File: metrics-result.test
+Type: alloc_space
+Time: 2026-10-05 17:41:20 MSK
+Showing nodes accounting for 108692.37kB, 95.17% of 114211.23kB total
+Dropped 433 nodes (cum <= 571.06kB)
+      flat  flat%   sum%        cum   cum%
+   32096kB 28.10% 28.10%    32096kB 28.10%  compress/flate.(*dictDecoder).init (inline)
+   30090kB 26.35% 54.45% 30403.53kB 26.62%  encoding/json.(*Decoder).refill
+18618.19kB 16.30% 70.75% 18618.19kB 16.30%  reflect.growslice
+ 7553.84kB  6.61% 77.36% 39649.89kB 34.72%  compress/flate.NewReader
+ 4368.72kB  3.83% 81.19%  4858.55kB  4.25%  encoding/json.(*decodeState).literalStore
+ 4122.41kB  3.61% 84.80%  4122.41kB  3.61%  bufio.NewReaderSize (inline)
+ 2280.30kB  2.00% 86.79% 57497.88kB 50.34%  github.com/tomkqwe/metrics/internal/handler.(*MetricsHandler).UpdateMetricsJSON
+ 2072.75kB  1.81% 88.61%  2072.75kB  1.81%  bytes.growSlice
+    1944kB  1.70% 90.31%  2363.62kB  2.07%  compress/flate.NewWriter (inline)
+ 1099.79kB  0.96% 91.27%  1139.84kB     1%  net/textproto.readMIMEHeader
+  877.62kB  0.77% 92.04%   877.62kB  0.77%  net/http.Header.Clone (inline)
+  767.92kB  0.67% 92.72%   767.92kB  0.67%  net/textproto.MIMEHeader.Set (inline)
+     736kB  0.64% 93.36%      736kB  0.64%  net/http.init.func16
+  689.56kB   0.6% 93.96% 44461.25kB 38.93%  compress/gzip.NewReader (inline)
+  313.44kB  0.27% 94.24%  1164.93kB  1.02%  net/http.readRequest
+  282.09kB  0.25% 94.49%  1587.38kB  1.39%  net/http.(*conn).readRequest
+  244.99kB  0.21% 94.70%  1109.09kB  0.97%  net/http.(*persistConn).readLoop
+  141.05kB  0.12% 94.82%   807.10kB  0.71%  net/http.ReadResponse
+   78.36kB 0.069% 94.89%  1453.07kB  1.27%  net/http.(*Transport).roundTrip
+   70.52kB 0.062% 94.95%  3042.48kB  2.66%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+   63.94kB 0.056% 95.01%  2136.69kB  1.87%  bytes.(*Buffer).grow
+   62.73kB 0.055% 95.06%  1025.40kB   0.9%  net/http.(*Request).write
+   62.69kB 0.055% 95.12%  4921.23kB  4.31%  encoding/json.(*decodeState).object
+   31.39kB 0.027% 95.15% 103629.32kB 90.73%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+   15.80kB 0.014% 95.16% 105726.12kB 92.57%  net/http.(*conn).serve
+    7.84kB 0.0069% 95.17%  2072.11kB  1.81%  net/http.(*Client).do
+    0.14kB 0.00012% 95.17%  6222.88kB  5.45%  testing.(*B).runN
+    0.11kB 9.6e-05% 95.17%  1025.51kB   0.9%  net/http.(*persistConn).writeLoop
+    0.09kB 8.2e-05% 95.17% 39665.66kB 34.73%  compress/gzip.(*Reader).readHeader
+    0.05kB 4.1e-05% 95.17% 43771.69kB 38.33%  compress/gzip.(*Reader).Reset
+    0.03kB 2.7e-05% 95.17%  6218.12kB  5.44%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 95.17%  4114.22kB  3.60%  bufio.NewReader (inline)
+         0     0% 95.17%  2112.94kB  1.85%  bytes.(*Buffer).Write
+         0     0% 95.17%  1775.50kB  1.55%  compress/flate.(*Writer).Close (inline)
+         0     0% 95.17%  1775.50kB  1.55%  compress/flate.(*compressor).close
+         0     0% 95.17%  1775.50kB  1.55%  compress/flate.(*compressor).deflate
+         0     0% 95.17%  1775.50kB  1.55%  compress/flate.(*compressor).writeBlock
+         0     0% 95.17%  1755.25kB  1.54%  compress/flate.(*huffmanBitWriter).write (inline)
+         0     0% 95.17%  1775.50kB  1.55%  compress/flate.(*huffmanBitWriter).writeBlock
+         0     0% 95.17%  1755.25kB  1.54%  compress/flate.(*huffmanBitWriter).writeCode
+         0     0% 95.17%  1755.25kB  1.54%  compress/flate.(*huffmanBitWriter).writeTokens
+         0     0% 95.17%  3351.25kB  2.93%  compress/gzip.(*Writer).Close
+         0     0% 95.17%  2426.31kB  2.12%  compress/gzip.(*Writer).Write
+         0     0% 95.17% 53989.98kB 47.27%  encoding/json.(*Decoder).Decode
+         0     0% 95.17% 30431.02kB 26.64%  encoding/json.(*Decoder).readValue
+         0     0% 95.17%  1195.24kB  1.05%  encoding/json.(*Encoder).Encode
+         0     0% 95.17% 23555.09kB 20.62%  encoding/json.(*decodeState).array
+         0     0% 95.17% 23558.97kB 20.63%  encoding/json.(*decodeState).unmarshal
+         0     0% 95.17% 23555.09kB 20.62%  encoding/json.(*decodeState).value
+         0     0% 95.17% 104012.85kB 91.07%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 95.17% 57498.24kB 50.34%  github.com/go-chi/chi/v5.(*Mux).routeHTTP
+         0     0% 95.17%  6159.12kB  5.39%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 95.17%  3116.64kB  2.73%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send.func1
+         0     0% 95.17%  3116.64kB  2.73%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).sendCompressedBody
+         0     0% 95.17%  1575.75kB  1.38%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close
+         0     0% 95.17%  1575.75kB  1.38%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 95.17%  3116.64kB  2.73%  github.com/tomkqwe/metrics/internal/retry.DoWithDelays
+         0     0% 95.17%  2072.11kB  1.81%  net/http.(*Client).Do (inline)
+         0     0% 95.17%  1594.12kB  1.40%  net/http.(*Client).send
+         0     0% 95.17%  1453.07kB  1.27%  net/http.(*Transport).RoundTrip
+         0     0% 95.17%   807.10kB  0.71%  net/http.(*persistConn).readResponse
+         0     0% 95.17%   753.07kB  0.66%  net/http.(*transferWriter).doBodyCopy
+         0     0% 95.17%   776.62kB  0.68%  net/http.(*transferWriter).writeBody
+         0     0% 95.17% 103629.32kB 90.73%  net/http.HandlerFunc.ServeHTTP
+         0     0% 95.17%   767.92kB  0.67%  net/http.Header.Set (inline)
+         0     0% 95.17%   752.64kB  0.66%  net/http.getCopyBuf (inline)
+         0     0% 95.17%  1453.07kB  1.27%  net/http.send
+         0     0% 95.17% 104012.85kB 91.07%  net/http.serverHandler.ServeHTTP
+         0     0% 95.17%  1139.84kB     1%  net/textproto.(*Reader).ReadMIMEHeader (inline)
+         0     0% 95.17% 18618.19kB 16.30%  reflect.Value.Grow
+         0     0% 95.17% 18618.19kB 16.30%  reflect.Value.grow
+         0     0% 95.17%   901.79kB  0.79%  sync.(*Pool).Get
+         0     0% 95.17%  5359.38kB  4.69%  testing.(*B).launch
+         0     0% 95.17%   859.89kB  0.75%  testing.(*B).run1.func1

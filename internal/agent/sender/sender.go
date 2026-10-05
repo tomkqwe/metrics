@@ -2,7 +2,6 @@ package sender
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomkqwe/metrics/internal/gziputil"
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/retry"
 	"github.com/tomkqwe/metrics/internal/signature"
@@ -122,7 +122,8 @@ func (s *HTTPSender) metricsURL() string {
 
 func compressedBody(metrics []models.Metric) ([]byte, error) {
 	var body bytes.Buffer
-	writer := gzip.NewWriter(&body)
+	writer := gziputil.AcquireWriter(&body)
+	defer gziputil.ReleaseWriter(writer)
 	if err := json.NewEncoder(writer).Encode(metrics); err != nil {
 		_ = writer.Close()
 		return nil, err

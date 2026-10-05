@@ -1,0 +1,17 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/tomkqwe/metrics/internal/performance
+cpu: Apple M3 Pro
+BenchmarkServiceUpdateBatch-2   	    1000	      4900 ns/op	       0 B/op	       0 allocs/op
+BenchmarkServiceUpdateBatch-2   	    1000	      2844 ns/op	       0 B/op	       0 allocs/op
+BenchmarkServiceUpdateBatch-2   	    1000	      2639 ns/op	       0 B/op	       0 allocs/op
+BenchmarkServerSnapshot-2       	    1000	     21024 ns/op	   10632 B/op	     132 allocs/op
+BenchmarkServerSnapshot-2       	    1000	     15916 ns/op	   10632 B/op	     132 allocs/op
+BenchmarkServerSnapshot-2       	    1000	     13756 ns/op	   10632 B/op	     132 allocs/op
+BenchmarkAgentSnapshot-2        	    1000	     14529 ns/op	   15464 B/op	     133 allocs/op
+BenchmarkAgentSnapshot-2        	    1000	     13363 ns/op	   15464 B/op	     133 allocs/op
+BenchmarkAgentSnapshot-2        	    1000	     13145 ns/op	   15464 B/op	     133 allocs/op
+BenchmarkPipeline-2             	    1000	    331507 ns/op	  118837 B/op	     532 allocs/op
+BenchmarkPipeline-2             	    1000	    293481 ns/op	  123424 B/op	     532 allocs/op
+BenchmarkPipeline-2             	    1000	    289305 ns/op	  119027 B/op	     532 allocs/op
+PASS
