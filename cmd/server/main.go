@@ -15,12 +15,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/tomkqwe/metrics/internal/audit"
 	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
-	"github.com/tomkqwe/metrics/internal/repository/file_storage"
-	"github.com/tomkqwe/metrics/internal/repository/mem_storage"
+	"github.com/tomkqwe/metrics/internal/repository/filestorage"
+	"github.com/tomkqwe/metrics/internal/repository/memstorage"
 	"github.com/tomkqwe/metrics/internal/repository/postgres"
 	"github.com/tomkqwe/metrics/internal/service"
 )
@@ -32,6 +33,8 @@ const (
 )
 
 type config struct {
+	AuditFile       string        `env:"AUDIT_FILE"`
+	AuditURL        string        `env:"AUDIT_URL"`
 	ServerAddress   string        `env:"ADDRESS"`
 	StoreInterval   time.Duration `env:"STORE_INTERVAL"`
 	FileStoragePath string        `env:"FILE_STORAGE_PATH"`
@@ -89,7 +92,23 @@ func main() {
 	defer cancel()
 	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
 
-	handler, err := newServerHandler(logger, metricService, db, cfg.Key)
+	var observers []audit.Observer
+	if cfg.AuditFile != "" {
+		observer, err := audit.NewFileObserver(cfg.AuditFile)
+		if err != nil {
+			logger.Fatal("create file audit observer", zap.Error(err))
+		}
+		defer observer.Close()
+		observers = append(observers, observer)
+	}
+	if cfg.AuditURL != "" {
+		observer, err := audit.NewHTTPObserver(cfg.AuditURL)
+		if err != nil {
+			logger.Fatal("create HTTP audit observer", zap.Error(err))
+		}
+		observers = append(observers, observer)
+	}
+	handler, err := newServerHandler(logger, metricService, db, cfg.Key, observers...)
 	if err != nil {
 		logger.Fatal("create server handler", zap.Error(err))
 	}
@@ -107,6 +126,8 @@ func parseConfig(args []string) (config, error) {
 
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	flags.StringVar(&cfg.AuditFile, "audit-file", "", "audit log file path")
+	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
 	flags.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
 	flags.Var(secondsDurationFlag{value: &cfg.StoreInterval}, "i", "metrics store interval in seconds")
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
@@ -166,13 +187,13 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string) (http.Handler, error) {
+func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, observers ...audit.Observer) (http.Handler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
 	router.Use(middleware.WithHashSHA256(key))
 	router.Use(middleware.WithGzip)
 
-	metricsHandler, err := handler.NewMetricsHandler(srv)
+	metricsHandler, err := handler.NewMetricsHandler(srv, observers...)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +211,7 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	return router, nil
 }
 
-func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *file_storage.FileStorage, error) {
+func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *filestorage.FileStorage, error) {
 	if cfg.DatabaseDSN != "" {
 		if db == nil {
 			return nil, nil, fmt.Errorf("postgres database is nil")
@@ -199,12 +220,12 @@ func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *file_storage
 		return postgres.NewPgStorage(db), nil, nil
 	}
 
-	storage := mem_storage.NewMemStorage()
+	storage := memstorage.NewMemStorage()
 	if cfg.FileStoragePath == "" {
 		return storage, nil, nil
 	}
 
-	fileStorage := file_storage.NewFileStorage(cfg.FileStoragePath)
+	fileStorage := filestorage.NewFileStorage(cfg.FileStoragePath)
 	if cfg.Restore {
 		metrics, err := fileStorage.Load()
 		if err != nil {
@@ -222,7 +243,7 @@ func startPeriodicSave(
 	ctx context.Context,
 	interval time.Duration,
 	storage repository.Storage,
-	fileStorage *file_storage.FileStorage,
+	fileStorage *filestorage.FileStorage,
 	logger *zap.Logger,
 ) {
 	if interval <= 0 || fileStorage == nil {

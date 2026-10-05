@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tomkqwe/metrics/internal/audit"
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/service"
 )
@@ -20,6 +23,7 @@ var (
 
 type MetricsHandler struct {
 	service service.Service
+	audit   *audit.Publisher
 }
 
 type metricView struct {
@@ -51,12 +55,13 @@ var metricsListTemplate = template.Must(template.New("metrics").Parse(`<!DOCTYPE
 </body>
 </html>`))
 
-func NewMetricsHandler(srv service.Service) (*MetricsHandler, error) {
+func NewMetricsHandler(srv service.Service, observers ...audit.Observer) (*MetricsHandler, error) {
 	if srv == nil {
 		return nil, ErrServiceInvalid
 	}
 	return &MetricsHandler{
 		service: srv,
+		audit:   audit.NewPublisher(observers...),
 	}, nil
 }
 
@@ -78,6 +83,8 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
+
+	m.auditUpdate(r, []string{metricName})
 
 	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
 
@@ -140,6 +147,8 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	m.auditUpdate(r, []string{reqBody.ID})
+
 	metric, err := m.service.GetMetricJSON(r.Context(), &reqBody)
 	if err != nil {
 		writeServiceError(w, err)
@@ -165,6 +174,12 @@ func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Reques
 		writeServiceError(w, err)
 		return
 	}
+
+	names := make([]string, 0, len(reqBody))
+	for _, metric := range reqBody {
+		names = append(names, metric.ID)
+	}
+	m.auditUpdate(r, names)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -240,4 +255,15 @@ func isBadRequestError(err error) bool {
 
 	var numErr *strconv.NumError
 	return errors.As(err, &numErr)
+}
+
+func (m *MetricsHandler) auditUpdate(r *http.Request, names []string) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	event := audit.Event{TS: time.Now().Unix(), Metrics: names, IPAddress: ip}
+	if err := m.audit.Notify(r.Context(), event); err != nil {
+		log.Printf("deliver audit event: %v", err)
+	}
 }
