@@ -49,8 +49,7 @@ func BenchmarkServiceUpdateBatch(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := srv.UpdateMetricsJSON(ctx, metrics); err != nil {
 			b.Fatal(err)
 		}
@@ -66,8 +65,7 @@ func BenchmarkServerSnapshot(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var err error
 		snapshot, err = storage.Snapshot(ctx)
 		if err != nil {
@@ -80,8 +78,7 @@ func BenchmarkAgentSnapshot(b *testing.B) {
 	storage := agentstorage.NewMemoryStorage()
 	storage.Update(metricBatch())
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		snapshot = storage.Snapshot()
 	}
 }
@@ -96,7 +93,7 @@ func BenchmarkPipeline(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	h, err := handler.NewMetricsHandler(srv)
+	h, err := handler.NewMetricsHandler(srv, nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -114,13 +111,11 @@ func BenchmarkPipeline(b *testing.B) {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := agent.Send(ctx, metrics); err != nil {
 			b.Fatal(err)
 		}
 	}
-	b.StopTimer()
 	result, err := storage.Snapshot(ctx)
 	if err != nil || len(result) != len(metrics) {
 		b.Fatalf("snapshot length=%d error=%v", len(result), err)

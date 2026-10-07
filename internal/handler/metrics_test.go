@@ -15,7 +15,7 @@ import (
 )
 
 func TestNewMetricsHandlerReturnsErrorForNilService(t *testing.T) {
-	_, err := NewMetricsHandler(nil)
+	_, err := NewMetricsHandler(nil, nil)
 	if !errors.Is(err, ErrServiceInvalid) {
 		t.Fatalf("NewMetricsHandler() error = %v, want %v", err, ErrServiceInvalid)
 	}
@@ -23,7 +23,7 @@ func TestNewMetricsHandlerReturnsErrorForNilService(t *testing.T) {
 
 func TestMetricsHandlerUpdateMetricSuccess(t *testing.T) {
 	service := &fakeService{}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -96,7 +96,7 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeService{err: tt.serviceErr}
-			handler, err := NewMetricsHandler(service)
+			handler, err := NewMetricsHandler(service, nil)
 			if err != nil {
 				t.Fatalf("NewMetricsHandler() error = %v", err)
 			}
@@ -115,7 +115,7 @@ func TestMetricsHandlerUpdateMetricRejectsInvalidRequests(t *testing.T) {
 
 func TestMetricsHandlerGetMetricValueSuccess(t *testing.T) {
 	service := &fakeService{getValue: "12.5"}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestMetricsHandlerGetMetricValueSuccess(t *testing.T) {
 
 func TestMetricsHandlerGetMetricValueReturnsNotFound(t *testing.T) {
 	service := &fakeService{getErr: service.ErrMetricNotFound}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -170,7 +170,7 @@ func TestMetricsHandlerListMetrics(t *testing.T) {
 			},
 		},
 	}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestMetricsHandlerUpdateMetricJSONSuccess(t *testing.T) {
 			Value: &value,
 		},
 	}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -278,7 +278,7 @@ func TestMetricsHandlerUpdateMetricJSONRejectsInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeService{updateJSONErr: tt.serviceErr}
-			handler, err := NewMetricsHandler(service)
+			handler, err := NewMetricsHandler(service, nil)
 			if err != nil {
 				t.Fatalf("NewMetricsHandler() error = %v", err)
 			}
@@ -297,7 +297,7 @@ func TestMetricsHandlerUpdateMetricJSONRejectsInvalidRequests(t *testing.T) {
 
 func TestMetricsHandlerUpdateMetricsJSONSuccess(t *testing.T) {
 	service := &fakeService{}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -351,7 +351,7 @@ func TestMetricsHandlerUpdateMetricsJSONRejectsInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeService{updateJSONBatchErr: tt.serviceErr}
-			handler, err := NewMetricsHandler(service)
+			handler, err := NewMetricsHandler(service, nil)
 			if err != nil {
 				t.Fatalf("NewMetricsHandler() error = %v", err)
 			}
@@ -377,7 +377,7 @@ func TestMetricsHandlerGetMetricJSONSuccess(t *testing.T) {
 			Value: &value,
 		},
 	}
-	handler, err := NewMetricsHandler(service)
+	handler, err := NewMetricsHandler(service, nil)
 	if err != nil {
 		t.Fatalf("NewMetricsHandler() error = %v", err)
 	}
@@ -450,7 +450,7 @@ func TestMetricsHandlerGetMetricJSONRejectsInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeService{getJSONErr: tt.serviceErr}
-			handler, err := NewMetricsHandler(service)
+			handler, err := NewMetricsHandler(service, nil)
 			if err != nil {
 				t.Fatalf("NewMetricsHandler() error = %v", err)
 			}

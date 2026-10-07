@@ -91,6 +91,7 @@ func TestServerAuditsSuccessfulUpdates(t *testing.T) {
 			res := httptest.NewRecorder()
 			before := time.Now().Unix()
 			router.ServeHTTP(res, req)
+			router.Close()
 			if res.Code != tt.status {
 				t.Fatalf("status=%d want=%d", res.Code, tt.status)
 			}

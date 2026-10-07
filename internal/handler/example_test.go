@@ -20,7 +20,7 @@ func exampleRouter() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	h, err := handler.NewMetricsHandler(srv)
+	h, err := handler.NewMetricsHandler(srv, nil)
 	if err != nil {
 		panic(err)
 	}

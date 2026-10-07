@@ -20,17 +20,19 @@ func (f observerFunc) Notify(ctx context.Context, event Event) error { return f(
 func TestPublisherContinuesAfterFailure(t *testing.T) {
 	failure := errors.New("unavailable")
 	called := false
-	p := NewPublisher(observerFunc(func(_ context.Context, e Event) error { e.Metrics[0] = "changed"; return failure }), observerFunc(func(_ context.Context, e Event) error {
+	p := NewPublisher(nil, observerFunc(func(_ context.Context, e Event) error { e.Metrics[0] = "changed"; return failure }), observerFunc(func(_ context.Context, e Event) error {
 		called = true
 		if e.Metrics[0] != "Alloc" {
 			t.Errorf("event mutated: %v", e)
 		}
 		return nil
 	}))
-	if err := p.Notify(context.Background(), Event{Metrics: []string{"Alloc"}}); !errors.Is(err, failure) || !called {
+	err := p.Notify(context.Background(), Event{Metrics: []string{"Alloc"}})
+	p.Close()
+	if err != nil || !called {
 		t.Fatalf("error=%v called=%v", err, called)
 	}
-	if err := NewPublisher().Notify(context.Background(), Event{}); err != nil {
+	if err := NewPublisher(nil).Notify(context.Background(), Event{}); err != nil {
 		t.Fatal(err)
 	}
 }

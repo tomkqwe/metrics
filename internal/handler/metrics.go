@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"github.com/tomkqwe/metrics/internal/audit"
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/service"
+	"go.uber.org/zap"
 )
 
 var (
@@ -27,6 +27,7 @@ var (
 type MetricsHandler struct {
 	service service.Service
 	audit   *audit.Publisher
+	logger  *zap.Logger
 }
 
 type metricView struct {
@@ -58,14 +59,20 @@ var metricsListTemplate = template.Must(template.New("metrics").Parse(`<!DOCTYPE
 </body>
 </html>`))
 
-// NewMetricsHandler creates metric handlers and registers audit observers. A nil service returns ErrServiceInvalid.
-func NewMetricsHandler(srv service.Service, observers ...audit.Observer) (*MetricsHandler, error) {
+// NewMetricsHandler creates handlers with structured logging and asynchronous audit.
+// A nil service returns ErrServiceInvalid; a nil logger disables logging.
+// The caller must call Close after all requests finish to drain audit deliveries.
+func NewMetricsHandler(srv service.Service, logger *zap.Logger, observers ...audit.Observer) (*MetricsHandler, error) {
 	if srv == nil {
 		return nil, ErrServiceInvalid
 	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &MetricsHandler{
 		service: srv,
-		audit:   audit.NewPublisher(observers...),
+		logger:  logger,
+		audit:   audit.NewPublisher(logger, observers...),
 	}, nil
 }
 
@@ -93,7 +100,7 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 
 	m.auditUpdate(r, []string{metricName})
 
-	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
+	m.logger.Info("metric updated", zap.String("type", metricType), zap.String("name", metricName), zap.String("value", rawValue))
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
@@ -140,7 +147,7 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = metricsListTemplate.Execute(w, metricsForView(metrics)); err != nil {
-		log.Printf("render metrics list: %v", err)
+		m.logger.Error("render metrics list", zap.Error(err))
 	}
 }
 
@@ -167,7 +174,7 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
-		log.Printf("encode response: %v", err)
+		m.logger.Error("encode response", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -215,7 +222,7 @@ func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
-		log.Printf("encode response: %v", err)
+		m.logger.Error("encode response", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -281,6 +288,9 @@ func (m *MetricsHandler) auditUpdate(r *http.Request, names []string) {
 	}
 	event := audit.Event{TS: time.Now().Unix(), Metrics: names, IPAddress: ip}
 	if err := m.audit.Notify(r.Context(), event); err != nil {
-		log.Printf("deliver audit event: %v", err)
+		m.logger.Error("queue audit event", zap.Error(err))
 	}
 }
+
+// Close waits for pending audit deliveries. Call it after all HTTP handlers finish.
+func (m *MetricsHandler) Close() { m.audit.Close() }

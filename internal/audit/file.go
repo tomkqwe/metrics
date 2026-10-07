@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -26,17 +27,23 @@ func NewFileObserver(path string) (*FileObserver, error) {
 
 // Notify appends one event as a JSON line under a write lock.
 func (f *FileObserver) Notify(_ context.Context, event Event) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("encode audit event: %w", err)
+	}
+	data = append(data, '\n')
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := json.NewEncoder(f.file).Encode(event); err != nil {
+	if _, err := f.file.Write(data); err != nil {
 		return fmt.Errorf("write audit file: %w", err)
 	}
 	return nil
 }
 
-// Close closes the audit file, waiting for any current write to finish.
+// Close syncs and closes the audit file after any current write finishes.
+// Drain the publisher first so queued events are written before closing.
 func (f *FileObserver) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.file.Close()
+	return errors.Join(f.file.Sync(), f.file.Close())
 }

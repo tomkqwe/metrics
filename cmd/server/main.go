@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"reflect"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env"
@@ -59,9 +62,20 @@ func main() {
 		_ = logger.Sync()
 	}()
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err = run(ctx, cfg, logger)
+	stop()
+	if err != nil {
+		logger.Error("server stopped", zap.Error(err))
+		_ = logger.Sync()
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, cfg config, logger *zap.Logger) error {
 	db, err := database.OpenPostgres(cfg.DatabaseDSN)
 	if err != nil {
-		logger.Fatal("open postgres", zap.Error(err))
+		return fmt.Errorf("open postgres: %w", err)
 	}
 	if db != nil {
 		defer func() {
@@ -70,12 +84,12 @@ func main() {
 	}
 
 	if err := database.RunMigrations(cfg.DatabaseDSN); err != nil {
-		logger.Fatal("run database migrations", zap.Error(err))
+		return fmt.Errorf("run database migrations: %w", err)
 	}
 
 	storage, fileStorage, err := newServerStorage(cfg, db)
 	if err != nil {
-		logger.Fatal("create server storage", zap.Error(err))
+		return fmt.Errorf("create server storage: %w", err)
 	}
 
 	serviceOptions := make([]service.MetricServiceOption, 0, 1)
@@ -85,37 +99,72 @@ func main() {
 
 	metricService, err := service.NewMetricService(storage, serviceOptions...)
 	if err != nil {
-		logger.Fatal("create metric service", zap.Error(err))
+		return fmt.Errorf("create metric service: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
+	stopSave := startPeriodicSave(context.Background(), cfg.StoreInterval, storage, fileStorage, logger)
+	defer stopSave()
 
 	var observers []audit.Observer
 	if cfg.AuditFile != "" {
 		observer, err := audit.NewFileObserver(cfg.AuditFile)
 		if err != nil {
-			logger.Fatal("create file audit observer", zap.Error(err))
+			return fmt.Errorf("create file audit observer: %w", err)
 		}
-		defer observer.Close()
+		defer func() {
+			if err := observer.Close(); err != nil {
+				logger.Error("close audit file", zap.Error(err))
+			}
+		}()
 		observers = append(observers, observer)
 	}
 	if cfg.AuditURL != "" {
 		observer, err := audit.NewHTTPObserver(cfg.AuditURL)
 		if err != nil {
-			logger.Fatal("create HTTP audit observer", zap.Error(err))
+			return fmt.Errorf("create HTTP audit observer: %w", err)
 		}
 		observers = append(observers, observer)
 	}
 	handler, err := newServerHandler(logger, metricService, db, cfg.Key, observers...)
 	if err != nil {
-		logger.Fatal("create server handler", zap.Error(err))
+		return fmt.Errorf("create server handler: %w", err)
 	}
-	if err := http.ListenAndServe(cfg.ServerAddress, handler); err != nil {
-		logger.Fatal("listen and serve", zap.Error(err))
-	}
+	defer handler.Close()
+	server := &http.Server{Addr: cfg.ServerAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second}
+	return serveUntilCancelled(ctx, server)
 }
+
+// serveUntilCancelled stops accepting requests and drains active handlers on
+// cancellation or a listener error. It does not cancel in-flight request contexts.
+func serveUntilCancelled(ctx context.Context, server *http.Server) error {
+	result := make(chan error, 1)
+	go func() { result <- server.ListenAndServe() }()
+	var serveErr error
+	select {
+	case serveErr = <-result:
+	case <-ctx.Done():
+		// Use a fresh context: the signal context has already been cancelled.
+		shutdownErr := server.Shutdown(context.Background())
+		serveErr = <-result
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(serveErr, shutdownErr)
+	}
+	shutdownErr := server.Shutdown(context.Background())
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = nil
+	}
+	return errors.Join(serveErr, shutdownErr)
+}
+
+// serverHandler owns the audit workers attached to its metric handlers.
+type serverHandler struct {
+	http.Handler
+	closeAudit func()
+}
+
+func (h *serverHandler) Close() { h.closeAudit() }
 
 func parseConfig(args []string) (config, error) {
 	cfg := config{
@@ -187,13 +236,13 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, observers ...audit.Observer) (http.Handler, error) {
+func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, observers ...audit.Observer) (*serverHandler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
 	router.Use(middleware.WithHashSHA256(key))
 	router.Use(middleware.WithGzip)
 
-	metricsHandler, err := handler.NewMetricsHandler(srv, observers...)
+	metricsHandler, err := handler.NewMetricsHandler(srv, logger, observers...)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +257,7 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	router.Post("/value/", metricsHandler.GetMetricJSON)
 	router.Get("/ping", handler.NewPingHandler(databasePinger).Ping)
 
-	return router, nil
+	return &serverHandler{Handler: router, closeAudit: metricsHandler.Close}, nil
 }
 
 func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *filestorage.FileStorage, error) {
@@ -245,13 +294,16 @@ func startPeriodicSave(
 	storage repository.Storage,
 	fileStorage *filestorage.FileStorage,
 	logger *zap.Logger,
-) {
+) func() {
 	if interval <= 0 || fileStorage == nil {
-		return
+		return func() {}
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 
 	ticker := time.NewTicker(interval)
 	go func() {
+		defer close(done)
 		defer ticker.Stop()
 		for {
 			select {
@@ -271,4 +323,5 @@ func startPeriodicSave(
 			}
 		}
 	}()
+	return func() { cancel(); <-done }
 }
