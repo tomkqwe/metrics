@@ -9,7 +9,7 @@ import (
 	"time"
 
 	models "github.com/tomkqwe/metrics/internal/model"
-	"github.com/tomkqwe/metrics/internal/repository/file_storage"
+	"github.com/tomkqwe/metrics/internal/repository/filestorage"
 	"github.com/tomkqwe/metrics/internal/repository/postgres"
 )
 
@@ -119,7 +119,7 @@ func TestParseConfigEnvOverridesFlags(t *testing.T) {
 
 func TestNewServerStorageRestoresMetrics(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	fileStorage := file_storage.NewFileStorage(path)
+	fileStorage := filestorage.NewFileStorage(path)
 	gaugeValue := 12.5
 	counterValue := int64(3)
 	if err := fileStorage.Save([]models.Metric{
@@ -158,7 +158,7 @@ func TestNewServerStorageRestoresMetrics(t *testing.T) {
 
 func TestNewServerStorageSkipsRestore(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "metrics.json")
-	fileStorage := file_storage.NewFileStorage(path)
+	fileStorage := filestorage.NewFileStorage(path)
 	gaugeValue := 12.5
 	if err := fileStorage.Save([]models.Metric{
 		{
@@ -237,7 +237,7 @@ func TestNewServerStorageReturnsErrorWhenDatabaseDSNConfiguredWithoutDB(t *testi
 func unsetServerEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY"} {
+	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)

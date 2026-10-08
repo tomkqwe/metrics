@@ -1,3 +1,4 @@
+// Package handler provides HTTP endpoints for metric updates, queries and database health.
 package handler
 
 import (
@@ -5,21 +6,28 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tomkqwe/metrics/internal/audit"
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/service"
+	"go.uber.org/zap"
 )
 
 var (
+	// ErrServiceInvalid indicates that no metric service was provided.
 	ErrServiceInvalid = errors.New("service is invalid")
 )
 
+// MetricsHandler serves metric update, lookup and listing endpoints using a Service.
 type MetricsHandler struct {
 	service service.Service
+	audit   *audit.Publisher
+	logger  *zap.Logger
 }
 
 type metricView struct {
@@ -51,15 +59,26 @@ var metricsListTemplate = template.Must(template.New("metrics").Parse(`<!DOCTYPE
 </body>
 </html>`))
 
-func NewMetricsHandler(srv service.Service) (*MetricsHandler, error) {
+// NewMetricsHandler creates handlers with structured logging and asynchronous audit.
+// A nil service returns ErrServiceInvalid; a nil logger disables logging.
+// The caller must call Close after all requests finish to drain audit deliveries.
+func NewMetricsHandler(srv service.Service, logger *zap.Logger, observers ...audit.Observer) (*MetricsHandler, error) {
 	if srv == nil {
 		return nil, ErrServiceInvalid
 	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &MetricsHandler{
 		service: srv,
+		logger:  logger,
+		audit:   audit.NewPublisher(logger, observers...),
 	}, nil
 }
 
+// UpdateMetric handles POST /update/{metricType}/{metricName}/{rawValue}.
+// It replaces gauges, increments counters and audits successful updates.
+// Success returns 200; invalid values or types return 400; missing path parameters return 404.
 func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusBadRequest)
@@ -79,12 +98,16 @@ func (m *MetricsHandler) UpdateMetric(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("metric updated: type=%s name=%s value=%s", metricType, metricName, rawValue)
+	m.auditUpdate(r, []string{metricName})
+
+	m.logger.Info("metric updated", zap.String("type", metricType), zap.String("name", metricName), zap.String("value", rawValue))
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(w, "%s %s = %s", metricType, metricName, rawValue)
 }
 
+// GetMetricValue handles GET /value/{metricType}/{metricName}, returning a plain-text value.
+// It returns 404 for a missing metric and 400 for an unsupported type.
 func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
@@ -109,6 +132,7 @@ func (m *MetricsHandler) GetMetricValue(w http.ResponseWriter, r *http.Request) 
 	_, _ = fmt.Fprint(w, value)
 }
 
+// ListMetrics handles GET / and renders stored metrics as an HTML table.
 func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
@@ -123,10 +147,12 @@ func (m *MetricsHandler) ListMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = metricsListTemplate.Execute(w, metricsForView(metrics)); err != nil {
-		log.Printf("render metrics list: %v", err)
+		m.logger.Error("render metrics list", zap.Error(err))
 	}
 }
 
+// UpdateMetricJSON handles POST /update/ with a JSON metric and returns its current stored value.
+// Invalid input returns 400; a successful update emits an audit event.
 func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	w.Header().Set("Content-Type", "application/json")
@@ -140,18 +166,23 @@ func (m *MetricsHandler) UpdateMetricJSON(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	m.auditUpdate(r, []string{reqBody.ID})
+
 	metric, err := m.service.GetMetricJSON(r.Context(), &reqBody)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
-		log.Printf("encode response: %v", err)
+		m.logger.Error("encode response", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }
 
+// UpdateMetricsJSON handles POST /updates/ with a JSON array of metrics.
+// It returns 200 with an empty body on success and emits one audit event for the batch.
+// Invalid input returns 400; storage failures return 500.
 func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	w.Header().Set("Content-Type", "application/json")
@@ -166,9 +197,17 @@ func (m *MetricsHandler) UpdateMetricsJSON(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	names := make([]string, 0, len(reqBody))
+	for _, metric := range reqBody {
+		names = append(names, metric.ID)
+	}
+	m.auditUpdate(r, names)
+
 	w.WriteHeader(http.StatusOK)
 }
 
+// GetMetricJSON handles POST /value/ with a metric ID and type, returning the stored metric as JSON.
+// It returns 404 when the metric does not exist and 400 for invalid input.
 func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var reqBody models.Metric
@@ -183,7 +222,7 @@ func (m *MetricsHandler) GetMetricJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(metric); err != nil {
-		log.Printf("encode response: %v", err)
+		m.logger.Error("encode response", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -241,3 +280,17 @@ func isBadRequestError(err error) bool {
 	var numErr *strconv.NumError
 	return errors.As(err, &numErr)
 }
+
+func (m *MetricsHandler) auditUpdate(r *http.Request, names []string) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	event := audit.Event{TS: time.Now().Unix(), Metrics: names, IPAddress: ip}
+	if err := m.audit.Notify(r.Context(), event); err != nil {
+		m.logger.Error("queue audit event", zap.Error(err))
+	}
+}
+
+// Close waits for pending audit deliveries. Call it after all HTTP handlers finish.
+func (m *MetricsHandler) Close() { m.audit.Close() }

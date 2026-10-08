@@ -11,14 +11,21 @@ import (
 )
 
 var (
-	ErrInvalidStorage     = errors.New("storage is invalid")
-	ErrUnknownMetricType  = errors.New("unknown metric type")
-	ErrMetricNotFound     = errors.New("metric not found")
-	ErrNilMetric          = errors.New("nil metric")
-	ErrInvalidMetricName  = errors.New("invalid metric name")
+	// ErrInvalidStorage indicates that no storage was provided.
+	ErrInvalidStorage = errors.New("storage is invalid")
+	// ErrUnknownMetricType indicates an unsupported metric type.
+	ErrUnknownMetricType = errors.New("unknown metric type")
+	// ErrMetricNotFound indicates that a requested metric does not exist.
+	ErrMetricNotFound = errors.New("metric not found")
+	// ErrNilMetric indicates a nil metric argument.
+	ErrNilMetric = errors.New("nil metric")
+	// ErrInvalidMetricName indicates an empty metric ID.
+	ErrInvalidMetricName = errors.New("invalid metric name")
+	// ErrInvalidMetricValue indicates a missing value for the requested metric type.
 	ErrInvalidMetricValue = errors.New("invalid metric value")
 )
 
+// MetricService validates and stores metrics, optionally persisting a snapshot after updates.
 type MetricService struct {
 	storage      repository.Storage
 	batchStorage repository.BatchStorage
@@ -26,14 +33,18 @@ type MetricService struct {
 	saveMu       sync.Mutex
 }
 
+// MetricServiceOption configures optional metric service behavior.
 type MetricServiceOption func(*MetricService)
 
+// WithUpdatePersister saves a full snapshot synchronously after each successful update.
+// Save errors are returned to the caller; already-applied storage updates are not rolled back.
 func WithUpdatePersister(save func([]models.Metric) error) MetricServiceOption {
 	return func(service *MetricService) {
 		service.saveOnUpdate = save
 	}
 }
 
+// NewMetricService creates a service over storage. A nil storage returns ErrInvalidStorage.
 func NewMetricService(storage repository.Storage, options ...MetricServiceOption) (*MetricService, error) {
 	if storage == nil {
 		return nil, ErrInvalidStorage
@@ -49,6 +60,7 @@ func NewMetricService(storage repository.Storage, options ...MetricServiceOption
 	return service, nil
 }
 
+// UpdateMetric parses a textual value and updates the named gauge or counter.
 func (m *MetricService) UpdateMetric(ctx context.Context, metricType, metricName, value string) error {
 	switch metricType {
 	case models.MetricTypeGauge:
@@ -72,6 +84,7 @@ func (m *MetricService) UpdateMetric(ctx context.Context, metricType, metricName
 	}
 }
 
+// GetMetricValue returns a metric as text, or ErrMetricNotFound when absent.
 func (m *MetricService) GetMetricValue(ctx context.Context, metricType, metricName string) (string, error) {
 	switch metricType {
 	case models.MetricTypeGauge:
@@ -97,10 +110,12 @@ func (m *MetricService) GetMetricValue(ctx context.Context, metricType, metricNa
 	}
 }
 
+// ListMetrics returns a snapshot of stored metrics.
 func (m *MetricService) ListMetrics(ctx context.Context) ([]models.Metric, error) {
 	return m.storage.Snapshot(ctx)
 }
 
+// UpdateMetricJSON validates and applies one metric, then runs the optional persister.
 func (m *MetricService) UpdateMetricJSON(ctx context.Context, metric *models.Metric) error {
 	if metric == nil {
 		return ErrNilMetric
@@ -114,6 +129,9 @@ func (m *MetricService) UpdateMetricJSON(ctx context.Context, metric *models.Met
 	})
 }
 
+// UpdateMetricsJSON validates the entire batch before updating storage.
+// It uses repository.BatchStorage when available; otherwise updates are sequential.
+// An empty batch is a no-op. Failures do not guarantee rollback for every storage implementation.
 func (m *MetricService) UpdateMetricsJSON(ctx context.Context, metrics []models.Metric) error {
 	if len(metrics) == 0 {
 		return nil
@@ -130,6 +148,7 @@ func (m *MetricService) UpdateMetricsJSON(ctx context.Context, metrics []models.
 	})
 }
 
+// GetMetricJSON returns a stored metric identified by ID and type, or ErrMetricNotFound.
 func (m *MetricService) GetMetricJSON(ctx context.Context, metric *models.Metric) (models.Metric, error) {
 	if metric == nil {
 		return models.Metric{}, ErrNilMetric

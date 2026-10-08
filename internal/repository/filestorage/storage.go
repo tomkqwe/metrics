@@ -1,4 +1,5 @@
-package file_storage
+// Package filestorage persists metric snapshots as JSON files.
+package filestorage
 
 import (
 	"encoding/json"
@@ -12,19 +13,24 @@ import (
 	models "github.com/tomkqwe/metrics/internal/model"
 )
 
+// ErrInvalidFileStoragePath indicates an empty snapshot file path.
 var ErrInvalidFileStoragePath = errors.New("file storage path is empty")
 
+// FileStorage saves and loads JSON snapshots, serializing access within one instance.
 type FileStorage struct {
 	mu   sync.Mutex
 	path string
 }
 
+// NewFileStorage creates a snapshot store for path without opening the file.
 func NewFileStorage(path string) *FileStorage {
 	return &FileStorage{
 		path: path,
 	}
 }
 
+// Save writes a JSON snapshot to a temporary file and renames it over the destination.
+// Parent directories are created as needed; a nil snapshot is encoded as an empty array.
 func (s *FileStorage) Save(metrics []models.Metric) error {
 	if s.path == "" {
 		return ErrInvalidFileStoragePath
@@ -69,6 +75,7 @@ func (s *FileStorage) Save(metrics []models.Metric) error {
 	return nil
 }
 
+// Load reads a JSON snapshot. A missing or empty file returns a nil slice without an error.
 func (s *FileStorage) Load() ([]models.Metric, error) {
 	if s.path == "" {
 		return nil, ErrInvalidFileStoragePath

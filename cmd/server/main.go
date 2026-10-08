@@ -3,24 +3,28 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"reflect"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env"
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/tomkqwe/metrics/internal/audit"
 	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
-	"github.com/tomkqwe/metrics/internal/repository/file_storage"
-	"github.com/tomkqwe/metrics/internal/repository/mem_storage"
+	"github.com/tomkqwe/metrics/internal/repository/filestorage"
+	"github.com/tomkqwe/metrics/internal/repository/memstorage"
 	"github.com/tomkqwe/metrics/internal/repository/postgres"
 	"github.com/tomkqwe/metrics/internal/service"
 )
@@ -32,6 +36,8 @@ const (
 )
 
 type config struct {
+	AuditFile       string        `env:"AUDIT_FILE"`
+	AuditURL        string        `env:"AUDIT_URL"`
 	ServerAddress   string        `env:"ADDRESS"`
 	StoreInterval   time.Duration `env:"STORE_INTERVAL"`
 	FileStoragePath string        `env:"FILE_STORAGE_PATH"`
@@ -56,9 +62,20 @@ func main() {
 		_ = logger.Sync()
 	}()
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err = run(ctx, cfg, logger)
+	stop()
+	if err != nil {
+		logger.Error("server stopped", zap.Error(err))
+		_ = logger.Sync()
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, cfg config, logger *zap.Logger) error {
 	db, err := database.OpenPostgres(cfg.DatabaseDSN)
 	if err != nil {
-		logger.Fatal("open postgres", zap.Error(err))
+		return fmt.Errorf("open postgres: %w", err)
 	}
 	if db != nil {
 		defer func() {
@@ -67,12 +84,12 @@ func main() {
 	}
 
 	if err := database.RunMigrations(cfg.DatabaseDSN); err != nil {
-		logger.Fatal("run database migrations", zap.Error(err))
+		return fmt.Errorf("run database migrations: %w", err)
 	}
 
 	storage, fileStorage, err := newServerStorage(cfg, db)
 	if err != nil {
-		logger.Fatal("create server storage", zap.Error(err))
+		return fmt.Errorf("create server storage: %w", err)
 	}
 
 	serviceOptions := make([]service.MetricServiceOption, 0, 1)
@@ -82,21 +99,72 @@ func main() {
 
 	metricService, err := service.NewMetricService(storage, serviceOptions...)
 	if err != nil {
-		logger.Fatal("create metric service", zap.Error(err))
+		return fmt.Errorf("create metric service: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	startPeriodicSave(ctx, cfg.StoreInterval, storage, fileStorage, logger)
+	stopSave := startPeriodicSave(context.Background(), cfg.StoreInterval, storage, fileStorage, logger)
+	defer stopSave()
 
-	handler, err := newServerHandler(logger, metricService, db, cfg.Key)
+	var observers []audit.Observer
+	if cfg.AuditFile != "" {
+		observer, err := audit.NewFileObserver(cfg.AuditFile)
+		if err != nil {
+			return fmt.Errorf("create file audit observer: %w", err)
+		}
+		defer func() {
+			if err := observer.Close(); err != nil {
+				logger.Error("close audit file", zap.Error(err))
+			}
+		}()
+		observers = append(observers, observer)
+	}
+	if cfg.AuditURL != "" {
+		observer, err := audit.NewHTTPObserver(cfg.AuditURL)
+		if err != nil {
+			return fmt.Errorf("create HTTP audit observer: %w", err)
+		}
+		observers = append(observers, observer)
+	}
+	handler, err := newServerHandler(logger, metricService, db, cfg.Key, observers...)
 	if err != nil {
-		logger.Fatal("create server handler", zap.Error(err))
+		return fmt.Errorf("create server handler: %w", err)
 	}
-	if err := http.ListenAndServe(cfg.ServerAddress, handler); err != nil {
-		logger.Fatal("listen and serve", zap.Error(err))
-	}
+	defer handler.Close()
+	server := &http.Server{Addr: cfg.ServerAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second}
+	return serveUntilCancelled(ctx, server)
 }
+
+// serveUntilCancelled stops accepting requests and drains active handlers on
+// cancellation or a listener error. It does not cancel in-flight request contexts.
+func serveUntilCancelled(ctx context.Context, server *http.Server) error {
+	result := make(chan error, 1)
+	go func() { result <- server.ListenAndServe() }()
+	var serveErr error
+	select {
+	case serveErr = <-result:
+	case <-ctx.Done():
+		// Use a fresh context: the signal context has already been cancelled.
+		shutdownErr := server.Shutdown(context.Background())
+		serveErr = <-result
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(serveErr, shutdownErr)
+	}
+	shutdownErr := server.Shutdown(context.Background())
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = nil
+	}
+	return errors.Join(serveErr, shutdownErr)
+}
+
+// serverHandler owns the audit workers attached to its metric handlers.
+type serverHandler struct {
+	http.Handler
+	closeAudit func()
+}
+
+func (h *serverHandler) Close() { h.closeAudit() }
 
 func parseConfig(args []string) (config, error) {
 	cfg := config{
@@ -107,6 +175,8 @@ func parseConfig(args []string) (config, error) {
 
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	flags.StringVar(&cfg.AuditFile, "audit-file", "", "audit log file path")
+	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
 	flags.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
 	flags.Var(secondsDurationFlag{value: &cfg.StoreInterval}, "i", "metrics store interval in seconds")
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
@@ -166,13 +236,13 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 	return time.Duration(seconds) * time.Second, nil
 }
 
-func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string) (http.Handler, error) {
+func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, observers ...audit.Observer) (*serverHandler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
 	router.Use(middleware.WithHashSHA256(key))
 	router.Use(middleware.WithGzip)
 
-	metricsHandler, err := handler.NewMetricsHandler(srv)
+	metricsHandler, err := handler.NewMetricsHandler(srv, logger, observers...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,10 +257,10 @@ func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger ha
 	router.Post("/value/", metricsHandler.GetMetricJSON)
 	router.Get("/ping", handler.NewPingHandler(databasePinger).Ping)
 
-	return router, nil
+	return &serverHandler{Handler: router, closeAudit: metricsHandler.Close}, nil
 }
 
-func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *file_storage.FileStorage, error) {
+func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *filestorage.FileStorage, error) {
 	if cfg.DatabaseDSN != "" {
 		if db == nil {
 			return nil, nil, fmt.Errorf("postgres database is nil")
@@ -199,12 +269,12 @@ func newServerStorage(cfg config, db *sql.DB) (repository.Storage, *file_storage
 		return postgres.NewPgStorage(db), nil, nil
 	}
 
-	storage := mem_storage.NewMemStorage()
+	storage := memstorage.NewMemStorage()
 	if cfg.FileStoragePath == "" {
 		return storage, nil, nil
 	}
 
-	fileStorage := file_storage.NewFileStorage(cfg.FileStoragePath)
+	fileStorage := filestorage.NewFileStorage(cfg.FileStoragePath)
 	if cfg.Restore {
 		metrics, err := fileStorage.Load()
 		if err != nil {
@@ -222,15 +292,18 @@ func startPeriodicSave(
 	ctx context.Context,
 	interval time.Duration,
 	storage repository.Storage,
-	fileStorage *file_storage.FileStorage,
+	fileStorage *filestorage.FileStorage,
 	logger *zap.Logger,
-) {
+) func() {
 	if interval <= 0 || fileStorage == nil {
-		return
+		return func() {}
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 
 	ticker := time.NewTicker(interval)
 	go func() {
+		defer close(done)
 		defer ticker.Stop()
 		for {
 			select {
@@ -250,4 +323,5 @@ func startPeriodicSave(
 			}
 		}
 	}()
+	return func() { cancel(); <-done }
 }

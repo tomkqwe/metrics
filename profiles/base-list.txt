@@ -1,0 +1,38 @@
+Total: 1.64GB
+ROUTINE ======================== github.com/tomkqwe/metrics/internal/agent/sender.compressedBody in /Users/avlebedev/GolandProjects/metrics/internal/agent/sender/sender.go
+   70.52kB   784.18MB (flat, cum) 46.77% of Total
+         .          .    123:func compressedBody(metrics []models.Metric) ([]byte, error) {
+   47.02kB    47.02kB    124:	var body bytes.Buffer
+         .   156.72kB    125:	writer := gzip.NewWriter(&body)
+   23.51kB   775.65MB    126:	if err := json.NewEncoder(writer).Encode(metrics); err != nil {
+         .          .    127:		_ = writer.Close()
+         .          .    128:		return nil, err
+         .          .    129:	}
+         .     8.33MB    130:	if err := writer.Close(); err != nil {
+         .          .    131:		return nil, err
+         .          .    132:	}
+         .          .    133:
+         .          .    134:	return body.Bytes(), nil
+         .          .    135:}
+ROUTINE ======================== github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).WriteHeader in /Users/avlebedev/GolandProjects/metrics/internal/middleware/gzip.go
+       48B   673.94kB (flat, cum) 0.039% of Total
+         .          .     31:func (w *gzipResponseWriter) WriteHeader(status int) {
+         .          .     32:	if w.wroteHeader {
+         .          .     33:		return
+         .          .     34:	}
+         .          .     35:
+         .          .     36:	w.wroteHeader = true
+         .    47.02kB     37:	if w.shouldCompress() {
+         .          .     38:		w.compressing = true
+       48B   156.77kB     39:		w.writer = gzip.NewWriter(w.ResponseWriter)
+         .    15.67kB     40:		w.Header().Set("Content-Encoding", gzipEncoding)
+         .    15.67kB     41:		w.Header().Add("Vary", "Accept-Encoding")
+         .          .     42:		w.Header().Del("Content-Length")
+         .          .     43:	}
+         .          .     44:
+         .   438.81kB     45:	w.ResponseWriter.WriteHeader(status)
+         .          .     46:}
+         .          .     47:
+         .          .     48:func (w *gzipResponseWriter) Write(data []byte) (int, error) {
+         .          .     49:	if !w.wroteHeader {
+         .          .     50:		w.WriteHeader(http.StatusOK)

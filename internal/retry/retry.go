@@ -1,3 +1,4 @@
+// Package retry retries operations after configurable delays.
 package retry
 
 import (
@@ -12,6 +13,7 @@ var defaultDelays = []time.Duration{
 	5 * time.Second,
 }
 
+// DefaultDelays returns a new slice containing retry delays of 1, 3 and 5 seconds.
 func DefaultDelays() []time.Duration {
 	delays := make([]time.Duration, len(defaultDelays))
 	copy(delays, defaultDelays)
@@ -19,10 +21,14 @@ func DefaultDelays() []time.Duration {
 	return delays
 }
 
+// Do runs an operation and retries eligible errors using DefaultDelays.
 func Do(ctx context.Context, operation func() error, isRetriable func(error) bool) error {
 	return DoWithDelays(ctx, DefaultDelays(), operation, isRetriable)
 }
 
+// DoWithDelays runs operation immediately, then retries eligible errors after each delay.
+// Waiting for positive delays respects context cancellation.
+// The operation itself must observe cancellation when necessary.
 func DoWithDelays(ctx context.Context, delays []time.Duration, operation func() error, isRetriable func(error) bool) error {
 	err := operation()
 	if err == nil {

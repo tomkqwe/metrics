@@ -1,3 +1,4 @@
+// Package storage holds independent copies of the latest agent measurements.
 package storage
 
 import (
@@ -7,6 +8,7 @@ import (
 	models "github.com/tomkqwe/metrics/internal/model"
 )
 
+// MemoryStorage stores the latest metrics by type and name with concurrent access protection.
 type MemoryStorage struct {
 	mu      sync.RWMutex
 	metrics map[metricKey]models.Metric
@@ -17,12 +19,14 @@ type metricKey struct {
 	id    string
 }
 
+// NewMemoryStorage returns an empty agent storage.
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
 		metrics: make(map[metricKey]models.Metric),
 	}
 }
 
+// Update replaces metrics by type and name, copying pointed-to values.
 func (s *MemoryStorage) Update(metrics []models.Metric) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -32,6 +36,7 @@ func (s *MemoryStorage) Update(metrics []models.Metric) {
 	}
 }
 
+// Snapshot returns independent copies sorted by type and name.
 func (s *MemoryStorage) Snapshot() []models.Metric {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

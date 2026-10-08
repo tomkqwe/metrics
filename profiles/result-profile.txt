@@ -1,0 +1,6 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/tomkqwe/metrics/internal/performance
+cpu: Apple M3 Pro
+BenchmarkPipeline-2   	    1000	   1311828 ns/op	  114751 B/op	     532 allocs/op
+PASS

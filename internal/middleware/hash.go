@@ -40,6 +40,8 @@ func (w *hashResponseWriter) Write(data []byte) (int, error) {
 	return w.body.Write(data)
 }
 
+// WithHashSHA256 verifies a supplied request signature and signs the response body.
+// An empty key disables signing; requests without a signature are accepted.
 func WithHashSHA256(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if key == "" {

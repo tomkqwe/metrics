@@ -1,0 +1,47 @@
+File: metrics-base.test
+Type: alloc_space
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for 1676148.95kB, 97.63% of 1716874.25kB total
+Dropped 452 nodes (cum <= 8584.37kB)
+      flat  flat%   sum%        cum   cum%
+ 1299888kB 75.71% 75.71% 1580477.36kB 92.06%  compress/flate.NewWriter (inline)
+272816.11kB 15.89% 91.60% 272816.11kB 15.89%  compress/flate.(*compressor).initDeflate (inline)
+   32096kB  1.87% 93.47%    32096kB  1.87%  compress/flate.(*dictDecoder).init (inline)
+   30090kB  1.75% 95.22% 30403.53kB  1.77%  encoding/json.(*Decoder).refill
+18618.19kB  1.08% 96.31% 18618.19kB  1.08%  reflect.growslice
+   11936kB   0.7% 97.00%    11936kB   0.7%  net/http.init.func16
+ 7553.84kB  0.44% 97.44% 39649.89kB  2.31%  compress/flate.NewReader
+ 2280.26kB  0.13% 97.58% 57637.98kB  3.36%  github.com/tomkqwe/metrics/internal/handler.(*MetricsHandler).UpdateMetricsJSON
+  689.56kB  0.04% 97.62% 44461.20kB  2.59%  compress/gzip.NewReader (inline)
+   70.52kB 0.0041% 97.62% 802995.70kB 46.77%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+   62.69kB 0.0037% 97.63% 12722.11kB  0.74%  net/http.(*Request).write
+   31.39kB 0.0018% 97.63% 892435.74kB 51.98%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+   15.80kB 0.00092% 97.63% 896376.93kB 52.21%  net/http.(*conn).serve
+    0.33kB 1.9e-05% 97.63% 12722.44kB  0.74%  net/http.(*persistConn).writeLoop
+    0.14kB 8.2e-06% 97.63% 806523.14kB 46.98%  testing.(*B).runN
+    0.09kB 5.5e-06% 97.63% 39665.66kB  2.31%  compress/gzip.(*Reader).readHeader
+    0.03kB 1.8e-06% 97.63% 806518.14kB 46.98%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 97.63% 280589.36kB 16.34%  compress/flate.(*compressor).init
+         0     0% 97.63% 43771.64kB  2.55%  compress/gzip.(*Reader).Reset
+         0     0% 97.63% 798764.23kB 46.52%  compress/gzip.(*Writer).Close
+         0     0% 97.63% 1580540.05kB 92.06%  compress/gzip.(*Writer).Write
+         0     0% 97.63% 53989.73kB  3.14%  encoding/json.(*Decoder).Decode
+         0     0% 97.63% 30434.05kB  1.77%  encoding/json.(*Decoder).readValue
+         0     0% 97.63% 794242.96kB 46.26%  encoding/json.(*Encoder).Encode
+         0     0% 97.63% 23554.86kB  1.37%  encoding/json.(*decodeState).array
+         0     0% 97.63% 23555.69kB  1.37%  encoding/json.(*decodeState).unmarshal
+         0     0% 97.63% 23554.86kB  1.37%  encoding/json.(*decodeState).value
+         0     0% 97.63% 893022.81kB 52.01%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 97.63% 57641.73kB  3.36%  github.com/go-chi/chi/v5.(*Mux).routeHTTP
+         0     0% 97.63% 806459.17kB 46.97%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 97.63% 790238.73kB 46.03%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close (inline)
+         0     0% 97.63% 790238.73kB 46.03%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 97.63% 12103.38kB   0.7%  net/http.(*transferWriter).doBodyCopy
+         0     0% 97.63% 12126.93kB  0.71%  net/http.(*transferWriter).writeBody
+         0     0% 97.63% 892435.74kB 51.98%  net/http.HandlerFunc.ServeHTTP
+         0     0% 97.63% 12103.25kB   0.7%  net/http.getCopyBuf (inline)
+         0     0% 97.63% 893022.81kB 52.01%  net/http.serverHandler.ServeHTTP
+         0     0% 97.63% 18618.19kB  1.08%  reflect.Value.Grow
+         0     0% 97.63% 18618.19kB  1.08%  reflect.Value.grow
+         0     0% 97.63% 14228.40kB  0.83%  sync.(*Pool).Get
+         0     0% 97.63% 804857.06kB 46.88%  testing.(*B).launch

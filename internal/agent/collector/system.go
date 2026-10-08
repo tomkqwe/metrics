@@ -13,11 +13,13 @@ import (
 type virtualMemoryFunc func() (*mem.VirtualMemoryStat, error)
 type cpuPercentFunc func(interval time.Duration, percpu bool) ([]float64, error)
 
+// SystemCollector collects host memory and per-CPU utilization measurements.
 type SystemCollector struct {
 	virtualMemory virtualMemoryFunc
 	cpuPercent    cpuPercentFunc
 }
 
+// NewSystemCollector creates a collector backed by gopsutil.
 func NewSystemCollector() *SystemCollector {
 	return &SystemCollector{
 		virtualMemory: mem.VirtualMemory,
@@ -25,6 +27,8 @@ func NewSystemCollector() *SystemCollector {
 	}
 }
 
+// Collect returns available memory and CPU gauges.
+// Measurements whose underlying system call fails are omitted.
 func (c *SystemCollector) Collect() []models.Metric {
 	metrics := make([]models.Metric, 0, 2+runtime.NumCPU())
 

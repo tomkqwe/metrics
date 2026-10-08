@@ -1,0 +1,144 @@
+File: metrics-base.test
+Type: inuse_space
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for 111.89kB, 94.03% of 118.99kB total
+Dropped 179 nodes (cum <= 0.59kB)
+      flat  flat%   sum%        cum   cum%
+      32kB 26.89% 26.89%       32kB 26.89%  net/http.init.func16
+   22.20kB 18.65% 45.55%    22.20kB 18.65%  runtime.mallocgc
+    8.02kB  6.74% 52.29%     8.02kB  6.74%  io.init.func1
+       8kB  6.72% 59.01%        8kB  6.72%  bytes.growSlice
+    6.56kB  5.52% 64.53%     6.56kB  5.52%  net/http.(*persistConn).readLoop
+    6.12kB  5.15% 69.67%     6.12kB  5.15%  bufio.NewWriterSize (inline)
+    5.20kB  4.37% 74.05%     5.20kB  4.37%  github.com/tomkqwe/metrics/internal/repository/memstorage.(*Storage).UpdateMetrics
+    4.09kB  3.44% 77.49%     4.09kB  3.44%  bufio.NewReaderSize (inline)
+    2.84kB  2.39% 79.88%     2.84kB  2.39%  encoding/json.(*decodeState).literalStore
+    2.62kB  2.21% 82.08%     2.62kB  2.21%  sync.(*Pool).pinSlow
+    2.34kB  1.96% 84.05%     2.34kB  1.96%  net/textproto.initCommonHeader
+    1.94kB  1.63% 85.67%     2.20kB  1.85%  encoding/json.typeFields
+    1.64kB  1.38% 87.05%     1.64kB  1.38%  net/http.(*persistConn).roundTrip
+    1.42kB  1.19% 88.25%     1.42kB  1.19%  regexp.onePassCopy
+    1.38kB  1.16% 89.40%     1.38kB  1.16%  regexp/syntax.(*compiler).inst (inline)
+    1.05kB  0.88% 90.28%     1.05kB  0.88%  net/http.(*Transport).queueForIdleConn
+    0.98kB  0.82% 91.10%     1.30kB  1.10%  net/http.http2configureTransports
+    0.92kB  0.77% 91.88%     0.93kB  0.78%  net/http.http2ConfigureServer
+    0.65kB  0.54% 92.42%     0.69kB  0.58%  net/http/httptest.(*Server).Start
+    0.55kB  0.46% 92.88%     1.60kB  1.35%  net/http.(*Transport).getConn
+    0.36kB   0.3% 93.18%     0.73kB  0.62%  net/http/httptest.NewUnstartedServer (inline)
+    0.33kB  0.28% 93.46%    33.84kB 28.44%  net/http.(*persistConn).writeLoop
+    0.18kB  0.15% 93.61%     3.21kB  2.70%  regexp.compile
+    0.12kB  0.11% 93.72%     8.45kB  7.10%  io.copyBuffer
+    0.09kB 0.079% 93.80%     1.13kB  0.95%  net/http.(*Server).onceSetNextProtoDefaults
+    0.05kB 0.039% 93.83%     2.45kB  2.06%  encoding/json.cachedTypeFields
+    0.05kB 0.039% 93.87%     2.50kB  2.10%  encoding/json.newStructEncoder (inline)
+    0.05kB 0.039% 93.91%     3.73kB  3.13%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).sendCompressedBody
+    0.05kB 0.039% 93.95%     8.50kB  7.14%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+    0.05kB 0.039% 93.99%     8.66kB  7.28%  net/http.(*chunkWriter).writeHeader
+    0.02kB 0.013% 94.01%     2.56kB  2.15%  encoding/json.newArrayEncoder
+    0.02kB 0.013% 94.02%     2.58kB  2.17%  encoding/json.newSliceEncoder
+    0.02kB 0.013% 94.03%    18.63kB 15.66%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 94.03%     8.66kB  7.28%  bufio.(*Writer).Flush
+         0     0% 94.03%     4.09kB  3.44%  bufio.NewReader (inline)
+         0     0% 94.03%        8kB  6.72%  bytes.(*Buffer).Write
+         0     0% 94.03%        8kB  6.72%  bytes.(*Buffer).grow
+         0     0% 94.03%     2.94kB  2.47%  encoding/json.(*Decoder).Decode
+         0     0% 94.03%    11.14kB  9.36%  encoding/json.(*Encoder).Encode
+         0     0% 94.03%     2.84kB  2.39%  encoding/json.(*decodeState).array
+         0     0% 94.03%     2.84kB  2.39%  encoding/json.(*decodeState).object
+         0     0% 94.03%     2.84kB  2.39%  encoding/json.(*decodeState).unmarshal
+         0     0% 94.03%     2.84kB  2.39%  encoding/json.(*decodeState).value
+         0     0% 94.03%    10.78kB  9.06%  encoding/json.(*encodeState).marshal
+         0     0% 94.03%    10.78kB  9.06%  encoding/json.(*encodeState).reflectValue
+         0     0% 94.03%        8kB  6.72%  encoding/json.arrayEncoder.encode
+         0     0% 94.03%     2.58kB  2.17%  encoding/json.newTypeEncoder
+         0     0% 94.03%        8kB  6.72%  encoding/json.sliceEncoder.encode
+         0     0% 94.03%        8kB  6.72%  encoding/json.stringEncoder
+         0     0% 94.03%        8kB  6.72%  encoding/json.structEncoder.encode
+         0     0% 94.03%     2.78kB  2.34%  encoding/json.typeEncoder
+         0     0% 94.03%     2.58kB  2.17%  encoding/json.typeEncoder.OnceValue[go.shape.func].func3 (inline)
+         0     0% 94.03%     2.58kB  2.17%  encoding/json.typeEncoder.func1
+         0     0% 94.03%     2.58kB  2.17%  encoding/json.typeEncoder.typeEncoder.OnceValue[go.shape.func].func3.func4
+         0     0% 94.03%     2.78kB  2.34%  encoding/json.valueEncoder
+         0     0% 94.03%     8.98kB  7.55%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 94.03%     8.25kB  6.93%  github.com/go-chi/chi/v5.(*Mux).routeHTTP
+         0     0% 94.03%    14.87kB 12.49%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 94.03%     3.73kB  3.13%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send.func1
+         0     0% 94.03%    11.14kB  9.36%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+         0     0% 94.03%     8.23kB  6.92%  github.com/tomkqwe/metrics/internal/handler.(*MetricsHandler).UpdateMetricsJSON
+         0     0% 94.03%     3.73kB  3.13%  github.com/tomkqwe/metrics/internal/retry.DoWithDelays
+         0     0% 94.03%     5.20kB  4.37%  github.com/tomkqwe/metrics/internal/service.(*MetricService).UpdateMetricsJSON
+         0     0% 94.03%     5.20kB  4.37%  github.com/tomkqwe/metrics/internal/service.(*MetricService).UpdateMetricsJSON.func1
+         0     0% 94.03%     5.20kB  4.37%  github.com/tomkqwe/metrics/internal/service.(*MetricService).updateAndPersist
+         0     0% 94.03%     5.20kB  4.37%  github.com/tomkqwe/metrics/internal/service.(*MetricService).updateMetrics
+         0     0% 94.03%     8.32kB  6.99%  io.Copy (inline)
+         0     0% 94.03%     8.27kB  6.95%  io.CopyN
+         0     0% 94.03%     8.27kB  6.95%  io.discard.ReadFrom
+         0     0% 94.03%     3.57kB  3.00%  main.main
+         0     0% 94.03%     3.55kB  2.99%  net/http.(*Client).Do (inline)
+         0     0% 94.03%     3.55kB  2.99%  net/http.(*Client).do
+         0     0% 94.03%     3.55kB  2.99%  net/http.(*Client).send
+         0     0% 94.03%    33.52kB 28.17%  net/http.(*Request).write
+         0     0% 94.03%     1.88kB  1.58%  net/http.(*Server).Serve
+         0     0% 94.03%     1.13kB  0.95%  net/http.(*Server).onceSetNextProtoDefaults_Serve
+         0     0% 94.03%     1.13kB  0.95%  net/http.(*Server).setupHTTP2_Serve (inline)
+         0     0% 94.03%     1.34kB  1.12%  net/http.(*Transport).CloseIdleConnections
+         0     0% 94.03%     3.55kB  2.99%  net/http.(*Transport).RoundTrip
+         0     0% 94.03%     1.45kB  1.21%  net/http.(*Transport).onceSetNextProtoDefaults
+         0     0% 94.03%     3.55kB  2.99%  net/http.(*Transport).roundTrip
+         0     0% 94.03%     8.66kB  7.28%  net/http.(*chunkWriter).Write
+         0     0% 94.03%     0.62kB  0.53%  net/http.(*conn).close
+         0     0% 94.03%     0.62kB  0.53%  net/http.(*conn).finalFlush
+         0     0% 94.03%     5.16kB  4.33%  net/http.(*conn).readRequest
+         0     0% 94.03%    32.26kB 27.11%  net/http.(*conn).serve
+         0     0% 94.03%     0.62kB  0.53%  net/http.(*conn).serve.func1
+         0     0% 94.03%     9.21kB  7.74%  net/http.(*response).finishRequest
+         0     0% 94.03%    32.38kB 27.21%  net/http.(*transferWriter).doBodyCopy
+         0     0% 94.03%    32.42kB 27.25%  net/http.(*transferWriter).writeBody
+         0     0% 94.03%     8.50kB  7.14%  net/http.HandlerFunc.ServeHTTP
+         0     0% 94.03%    32.25kB 27.10%  net/http.getCopyBuf (inline)
+         0     0% 94.03%     4.09kB  3.44%  net/http.newBufioReader
+         0     0% 94.03%     6.38kB  5.36%  net/http.newBufioWriterSize
+         0     0% 94.03%     2.66kB  2.23%  net/http.readRequest
+         0     0% 94.03%     3.55kB  2.99%  net/http.send
+         0     0% 94.03%     8.98kB  7.55%  net/http.serverHandler.ServeHTTP
+         0     0% 94.03%     1.34kB  1.12%  net/http/httptest.(*Server).Close
+         0     0% 94.03%     1.88kB  1.58%  net/http/httptest.(*Server).goServe.func1
+         0     0% 94.03%     1.42kB  1.19%  net/http/httptest.NewServer
+         0     0% 94.03%     2.34kB  1.96%  net/textproto.(*Reader).ReadMIMEHeader (inline)
+         0     0% 94.03%     2.34kB  1.96%  net/textproto.canonicalMIMEHeaderKey
+         0     0% 94.03%     2.34kB  1.96%  net/textproto.readMIMEHeader
+         0     0% 94.03%     3.21kB  2.70%  regexp.Compile (inline)
+         0     0% 94.03%     1.44kB  1.21%  regexp.compileOnePass
+         0     0% 94.03%     1.38kB  1.16%  regexp/syntax.(*compiler).compile
+         0     0% 94.03%     1.38kB  1.16%  regexp/syntax.(*compiler).rune
+         0     0% 94.03%     1.42kB  1.19%  regexp/syntax.Compile
+         0     0% 94.03%     5.20kB  4.37%  runtime.allocm
+         0     0% 94.03%     5.20kB  4.37%  runtime.forEachPInternal
+         0     0% 94.03%        1kB  0.84%  runtime.gcBgMarkWorker
+         0     0% 94.03%     5.20kB  4.37%  runtime.gcMarkDone.forEachP.func5
+         0     0% 94.03%     5.20kB  4.37%  runtime.handoffp
+         0     0% 94.03%     2.25kB  1.89%  runtime.mProfStackInit (inline)
+         0     0% 94.03%     3.57kB  3.00%  runtime.main
+         0     0% 94.03%     2.25kB  1.89%  runtime.makeProfStackFP (inline)
+         0     0% 94.03%     2.25kB  1.89%  runtime.makeslice
+         0     0% 94.03%    16.41kB 13.79%  runtime.malg
+         0     0% 94.03%     2.73kB  2.29%  runtime.mcommoninit
+         0     0% 94.03%     5.20kB  4.37%  runtime.newm
+         0     0% 94.03%    19.41kB 16.32%  runtime.newobject
+         0     0% 94.03%    15.97kB 13.42%  runtime.newproc.func1
+         0     0% 94.03%    15.97kB 13.42%  runtime.newproc1
+         0     0% 94.03%     5.20kB  4.37%  runtime.startm
+         0     0% 94.03%    21.16kB 17.79%  runtime.systemstack
+         0     0% 94.03%     7.97kB  6.70%  sync.(*Once).Do (inline)
+         0     0% 94.03%     7.97kB  6.70%  sync.(*Once).doSlow
+         0     0% 94.03%    42.26kB 35.51%  sync.(*Pool).Get
+         0     0% 94.03%     0.88kB  0.74%  sync.(*Pool).Put
+         0     0% 94.03%     2.62kB  2.21%  sync.(*Pool).pin
+         0     0% 94.03%    13.84kB 11.63%  testing.(*B).launch
+         0     0% 94.03%     4.79kB  4.02%  testing.(*B).run1.func1
+         0     0% 94.03%    18.71kB 15.72%  testing.(*B).runN
+         0     0% 94.03%     3.57kB  3.00%  testing.(*M).Run
+         0     0% 94.03%     3.23kB  2.72%  testing.newMatcher
+         0     0% 94.03%     3.31kB  2.78%  testing.runBenchmarks
+         0     0% 94.03%     3.23kB  2.72%  testing.simpleMatch.verify
+         0     0% 94.03%     3.21kB  2.70%  testing/internal/testdeps.TestDeps.MatchString

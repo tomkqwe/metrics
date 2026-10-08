@@ -1,0 +1,56 @@
+File: metrics-result.test
+Type: inuse_space
+Time: 2026-10-05 17:41:20 MSK
+Showing nodes accounting for 1642.05kB, 96.38% of 1703.65kB total
+Dropped 297 nodes (cum <= 8.52kB)
+      flat  flat%   sum%        cum   cum%
+    1296kB 76.07% 76.07%  1575.75kB 92.49%  compress/flate.NewWriter (inline)
+     272kB 15.97% 92.04%      272kB 15.97%  compress/flate.(*compressor).initDeflate (inline)
+      32kB  1.88% 93.92%       32kB  1.88%  net/http.init.func16
+   16.05kB  0.94% 94.86%    16.05kB  0.94%  io.init.func1
+   13.50kB  0.79% 95.65%    13.50kB  0.79%  compress/flate.(*huffmanEncoder).generate
+   12.09kB  0.71% 96.36%    12.09kB  0.71%  runtime.mallocgc
+    0.16kB 0.0092% 96.37%    16.55kB  0.97%  io.copyBuffer
+    0.11kB 0.0064% 96.38%    33.91kB  1.99%  net/http.(*persistConn).writeLoop
+    0.05kB 0.0028% 96.38%     8.84kB  0.52%  github.com/tomkqwe/metrics/internal/handler.(*MetricsHandler).UpdateMetricsJSON
+    0.05kB 0.0028% 96.38%  1584.81kB 93.02%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+    0.05kB 0.0028% 96.38%    33.80kB  1.98%  net/http.(*Request).write
+    0.02kB 0.00092% 96.38%    39.25kB  2.30%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 96.38%     8.80kB  0.52%  bufio.(*Writer).Flush
+         0     0% 96.38%    13.50kB  0.79%  compress/flate.(*Writer).Close (inline)
+         0     0% 96.38%    13.50kB  0.79%  compress/flate.(*compressor).close
+         0     0% 96.38%    13.50kB  0.79%  compress/flate.(*compressor).deflate
+         0     0% 96.38%   279.75kB 16.42%  compress/flate.(*compressor).init
+         0     0% 96.38%    13.50kB  0.79%  compress/flate.(*compressor).writeBlock
+         0     0% 96.38%        9kB  0.53%  compress/flate.(*huffmanBitWriter).indexTokens
+         0     0% 96.38%    13.50kB  0.79%  compress/flate.(*huffmanBitWriter).writeBlock
+         0     0% 96.38%  1589.25kB 93.29%  compress/gzip.(*Writer).Close
+         0     0% 96.38%  1575.75kB 92.49%  compress/gzip.(*Writer).Write
+         0     0% 96.38%    11.30kB  0.66%  encoding/json.(*Encoder).Encode
+         0     0% 96.38%    10.94kB  0.64%  encoding/json.(*encodeState).marshal
+         0     0% 96.38%    10.94kB  0.64%  encoding/json.(*encodeState).reflectValue
+         0     0% 96.38%  1585.53kB 93.07%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 96.38%     8.88kB  0.52%  github.com/go-chi/chi/v5.(*Mux).routeHTTP
+         0     0% 96.38%    35.45kB  2.08%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 96.38%    10.66kB  0.63%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send.func1
+         0     0% 96.38%    10.66kB  0.63%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).sendCompressedBody
+         0     0% 96.38%    24.80kB  1.46%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+         0     0% 96.38%  1575.75kB 92.49%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close
+         0     0% 96.38%  1575.75kB 92.49%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 96.38%    10.66kB  0.63%  github.com/tomkqwe/metrics/internal/retry.DoWithDelays
+         0     0% 96.38%    16.38kB  0.96%  io.Copy (inline)
+         0     0% 96.38%    16.30kB  0.96%  io.discard.ReadFrom
+         0     0% 96.38%     8.80kB  0.52%  net/http.(*chunkWriter).Write
+         0     0% 96.38%     8.80kB  0.52%  net/http.(*chunkWriter).writeHeader
+         0     0% 96.38%  1610.99kB 94.56%  net/http.(*conn).serve
+         0     0% 96.38%     9.48kB  0.56%  net/http.(*response).finishRequest
+         0     0% 96.38%    32.53kB  1.91%  net/http.(*transferWriter).doBodyCopy
+         0     0% 96.38%    32.58kB  1.91%  net/http.(*transferWriter).writeBody
+         0     0% 96.38%  1584.81kB 93.02%  net/http.HandlerFunc.ServeHTTP
+         0     0% 96.38%    32.36kB  1.90%  net/http.getCopyBuf (inline)
+         0     0% 96.38%  1585.53kB 93.07%  net/http.serverHandler.ServeHTTP
+         0     0% 96.38%     9.57kB  0.56%  runtime.newobject
+         0     0% 96.38%    11.07kB  0.65%  runtime.systemstack
+         0     0% 96.38%    51.27kB  3.01%  sync.(*Pool).Get
+         0     0% 96.38%    34.27kB  2.01%  testing.(*B).launch
+         0     0% 96.38%    39.33kB  2.31%  testing.(*B).runN

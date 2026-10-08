@@ -1,3 +1,4 @@
+// Package collector collects runtime and host resource measurements.
 package collector
 
 import (
@@ -8,17 +9,21 @@ import (
 	models "github.com/tomkqwe/metrics/internal/model"
 )
 
+// RuntimeCollector collects Go runtime statistics, a poll counter and a random gauge.
+// Calls to Collect must not run concurrently on the same instance.
 type RuntimeCollector struct {
 	pollCount int64
 	rand      *rand.Rand
 }
 
+// NewRuntimeCollector creates a collector with its own random source.
 func NewRuntimeCollector() *RuntimeCollector {
 	return &RuntimeCollector{
 		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
+// Collect returns runtime memory statistics, PollCount and RandomValue.
 func (c *RuntimeCollector) Collect() []models.Metric {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)

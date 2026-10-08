@@ -1,3 +1,4 @@
+// Package database opens PostgreSQL connection pools and applies schema migrations.
 package database
 
 import (
@@ -17,6 +18,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// OpenPostgres creates a PostgreSQL connection pool without checking connectivity.
+// An empty DSN returns nil, nil to disable PostgreSQL storage.
 func OpenPostgres(dsn string) (*sql.DB, error) {
 	if dsn == "" {
 		return nil, nil
@@ -25,6 +28,8 @@ func OpenPostgres(dsn string) (*sql.DB, error) {
 	return sql.Open("postgres", dsn)
 }
 
+// RunMigrations applies embedded SQL migrations, retrying connection exceptions.
+// An empty DSN or an already-current schema is a no-op.
 func RunMigrations(dsn string) error {
 	if dsn == "" {
 		return nil

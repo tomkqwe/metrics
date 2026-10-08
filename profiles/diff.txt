@@ -1,0 +1,31 @@
+File: metrics-result.test
+Type: alloc_space
+Time: 2026-10-05 17:38:57 MSK
+Showing nodes accounting for -1581552.28kB, 92.12% of 1716874.25kB total
+Dropped 182 nodes (cum <= 8584.37kB)
+      flat  flat%   sum%        cum   cum%
+-1297944kB 75.60% 75.60% -1578113.73kB 91.92%  compress/flate.NewWriter (inline)
+-272408.11kB 15.87% 91.47% -272408.11kB 15.87%  compress/flate.(*compressor).initDeflate (inline)
+  -11200kB  0.65% 92.12%   -11200kB  0.65%  net/http.init.func16
+   -0.22kB 1.3e-05% 92.12% -11696.93kB  0.68%  net/http.(*persistConn).writeLoop
+    0.05kB 2.7e-06% 92.12% -11696.71kB  0.68%  net/http.(*Request).write
+         0     0% 92.12% -280169.73kB 16.32%  compress/flate.(*compressor).init
+         0     0% 92.12% -795412.98kB 46.33%  compress/gzip.(*Writer).Close
+         0     0% 92.12% -1578113.73kB 91.92%  compress/gzip.(*Writer).Write
+         0     0% 92.12% -793047.72kB 46.19%  encoding/json.(*Encoder).Encode
+         0     0% 92.12% -789009.96kB 45.96%  github.com/go-chi/chi/v5.(*Mux).ServeHTTP
+         0     0% 92.12% -800300.05kB 46.61%  github.com/tomkqwe/metrics/internal/agent/sender.(*HTTPSender).Send
+         0     0% 92.12% -799953.22kB 46.59%  github.com/tomkqwe/metrics/internal/agent/sender.compressedBody
+         0     0% 92.12% -788662.98kB 45.94%  github.com/tomkqwe/metrics/internal/middleware.(*gzipResponseWriter).Close
+         0     0% 92.12% -788806.42kB 45.94%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1
+         0     0% 92.12% -788662.98kB 45.94%  github.com/tomkqwe/metrics/internal/middleware.WithGzip.func1.2
+         0     0% 92.12% -800300.02kB 46.61%  github.com/tomkqwe/metrics/internal/performance_test.BenchmarkPipeline
+         0     0% 92.12% -790650.80kB 46.05%  net/http.(*conn).serve
+         0     0% 92.12% -11350.30kB  0.66%  net/http.(*transferWriter).doBodyCopy
+         0     0% 92.12% -11350.30kB  0.66%  net/http.(*transferWriter).writeBody
+         0     0% 92.12% -788806.42kB 45.94%  net/http.HandlerFunc.ServeHTTP
+         0     0% 92.12% -11350.61kB  0.66%  net/http.getCopyBuf (inline)
+         0     0% 92.12% -789009.96kB 45.96%  net/http.serverHandler.ServeHTTP
+         0     0% 92.12% -13326.61kB  0.78%  sync.(*Pool).Get
+         0     0% 92.12% -799497.68kB 46.57%  testing.(*B).launch
+         0     0% 92.12% -800300.27kB 46.61%  testing.(*B).runN

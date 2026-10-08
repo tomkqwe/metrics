@@ -1,3 +1,4 @@
+// Package postgres stores gauges and counters in PostgreSQL.
 package postgres
 
 import (
@@ -34,11 +35,13 @@ const (
 	`
 )
 
+// Storage persists metrics in PostgreSQL and retries connection exceptions.
 type Storage struct {
 	db          *sql.DB
 	retryDelays []time.Duration
 }
 
+// NewPgStorage wraps db without opening or closing it. The caller owns the database connection pool.
 func NewPgStorage(db *sql.DB) *Storage {
 	return &Storage{
 		db:          db,
@@ -46,6 +49,7 @@ func NewPgStorage(db *sql.DB) *Storage {
 	}
 }
 
+// UpdateGauge inserts or replaces the named gauge.
 func (s *Storage) UpdateGauge(ctx context.Context, name string, value models.Gauge) error {
 	if err := s.ready(); err != nil {
 		return err
@@ -61,6 +65,7 @@ func (s *Storage) UpdateGauge(ctx context.Context, name string, value models.Gau
 	return nil
 }
 
+// UpdateCounter inserts the named counter or adds value to its existing value.
 func (s *Storage) UpdateCounter(ctx context.Context, name string, value models.Counter) error {
 	if err := s.ready(); err != nil {
 		return err
@@ -76,6 +81,7 @@ func (s *Storage) UpdateCounter(ctx context.Context, name string, value models.C
 	return nil
 }
 
+// UpdateMetrics applies the metric batch in a database transaction. An empty batch is a no-op.
 func (s *Storage) UpdateMetrics(ctx context.Context, metrics []models.Metric) error {
 	if len(metrics) == 0 {
 		return nil
@@ -93,6 +99,7 @@ func (s *Storage) UpdateMetrics(ctx context.Context, metrics []models.Metric) er
 	return nil
 }
 
+// GetGauge returns the gauge value and whether it exists.
 func (s *Storage) GetGauge(ctx context.Context, name string) (models.Gauge, bool, error) {
 	if err := s.ready(); err != nil {
 		return 0, false, err
@@ -116,6 +123,7 @@ func (s *Storage) GetGauge(ctx context.Context, name string) (models.Gauge, bool
 	return models.Gauge(value), true, nil
 }
 
+// GetCounter returns the counter value and whether it exists.
 func (s *Storage) GetCounter(ctx context.Context, name string) (models.Counter, bool, error) {
 	if err := s.ready(); err != nil {
 		return 0, false, err
@@ -139,6 +147,8 @@ func (s *Storage) GetCounter(ctx context.Context, name string) (models.Counter, 
 	return models.Counter(value), true, nil
 }
 
+// Snapshot reads gauges and counters and sorts them by type and name.
+// The separate queries do not provide a transactionally consistent snapshot.
 func (s *Storage) Snapshot(ctx context.Context) ([]models.Metric, error) {
 	if err := s.ready(); err != nil {
 		return nil, err

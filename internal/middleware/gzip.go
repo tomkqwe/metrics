@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/tomkqwe/metrics/internal/gziputil"
 )
 
 var _ io.Closer = (*gzipResponseWriter)(nil)
@@ -36,7 +38,7 @@ func (w *gzipResponseWriter) WriteHeader(status int) {
 	w.wroteHeader = true
 	if w.shouldCompress() {
 		w.compressing = true
-		w.writer = gzip.NewWriter(w.ResponseWriter)
+		w.writer = gziputil.AcquireWriter(w.ResponseWriter)
 		w.Header().Set("Content-Encoding", gzipEncoding)
 		w.Header().Add("Vary", "Accept-Encoding")
 		w.Header().Del("Content-Length")
@@ -88,7 +90,10 @@ func (w *gzipResponseWriter) Close() error {
 		return nil
 	}
 
-	return w.writer.Close()
+	err := w.writer.Close()
+	gziputil.ReleaseWriter(w.writer)
+	w.writer = nil
+	return err
 }
 
 func (w *gzipResponseWriter) shouldCompress() bool {
@@ -105,6 +110,8 @@ func (w *gzipResponseWriter) shouldCompress() bool {
 	return ok
 }
 
+// WithGzip decompresses gzip request bodies and compresses JSON or HTML responses
+// when the client advertises gzip support. Malformed gzip input returns 400.
 func WithGzip(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hasEncoding(r.Header.Get("Content-Encoding"), gzipEncoding) {
