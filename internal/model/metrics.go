@@ -10,6 +10,8 @@ const (
 
 // Metrics is the JSON representation of a named gauge or counter.
 // Pointer values distinguish a missing field from an explicitly supplied zero.
+//
+// generate:reset
 type Metrics struct {
 	// ID is the metric name.
 	ID string `json:"id"`
