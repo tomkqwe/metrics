@@ -15,14 +15,14 @@ import (
 
 // exampleRouter wires the public handlers to the same endpoint paths as the server.
 // Each example has independent in-memory storage and needs no network listener.
-func exampleRouter() http.Handler {
+func exampleRouter() (http.Handler, error) {
 	srv, err := service.NewMetricService(memstorage.NewMemStorage())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	h, err := handler.NewMetricsHandler(srv, nil)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	router := chi.NewRouter()
 	router.Post("/update/{metricType}/{metricName}/{rawValue}", h.UpdateMetric)
@@ -31,7 +31,7 @@ func exampleRouter() http.Handler {
 	router.Post("/updates/", h.UpdateMetricsJSON)
 	router.Post("/value/", h.GetMetricJSON)
 	router.Get("/", h.ListMetrics)
-	return router
+	return router, nil
 }
 
 func exampleRequest(router http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -45,7 +45,11 @@ func exampleRequest(router http.Handler, method, path, body string) *httptest.Re
 }
 
 func ExampleMetricsHandler_UpdateMetric() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	response := exampleRequest(router, http.MethodPost, "/update/gauge/Alloc/12.5", "")
 	fmt.Println(response.Code)
 	fmt.Println(response.Body.String())
@@ -55,7 +59,11 @@ func ExampleMetricsHandler_UpdateMetric() {
 }
 
 func ExampleMetricsHandler_GetMetricValue() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	exampleRequest(router, http.MethodPost, "/update/counter/PollCount/3", "")
 	exampleRequest(router, http.MethodPost, "/update/counter/PollCount/2", "")
 	response := exampleRequest(router, http.MethodGet, "/value/counter/PollCount", "")
@@ -67,7 +75,11 @@ func ExampleMetricsHandler_GetMetricValue() {
 }
 
 func ExampleMetricsHandler_UpdateMetricJSON() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	response := exampleRequest(router, http.MethodPost, "/update/", `{"id":"Alloc","type":"gauge","value":12.5}`)
 	fmt.Println(response.Code)
 	fmt.Print(response.Body.String())
@@ -77,7 +89,11 @@ func ExampleMetricsHandler_UpdateMetricJSON() {
 }
 
 func ExampleMetricsHandler_UpdateMetricsJSON() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	response := exampleRequest(router, http.MethodPost, "/updates/", `[
   {"id":"Alloc","type":"gauge","value":12.5},
   {"id":"PollCount","type":"counter","delta":3}
@@ -96,7 +112,11 @@ func ExampleMetricsHandler_UpdateMetricsJSON() {
 }
 
 func ExampleMetricsHandler_GetMetricJSON() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	exampleRequest(router, http.MethodPost, "/update/", `{"id":"PollCount","type":"counter","delta":3}`)
 	response := exampleRequest(router, http.MethodPost, "/value/", `{"id":"PollCount","type":"counter"}`)
 	fmt.Println(response.Code)
@@ -107,19 +127,33 @@ func ExampleMetricsHandler_GetMetricJSON() {
 }
 
 func ExampleMetricsHandler_GetMetricJSON_notFound() {
-	response := exampleRequest(exampleRouter(), http.MethodPost, "/value/", `{"id":"Unknown","type":"gauge"}`)
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	response := exampleRequest(router, http.MethodPost, "/value/", `{"id":"Unknown","type":"gauge"}`)
 	fmt.Println(response.Code)
 	// Output: 404
 }
 
 func ExampleMetricsHandler_UpdateMetricJSON_invalidValue() {
-	response := exampleRequest(exampleRouter(), http.MethodPost, "/update/", `{"id":"Alloc","type":"gauge"}`)
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	response := exampleRequest(router, http.MethodPost, "/update/", `{"id":"Alloc","type":"gauge"}`)
 	fmt.Println(response.Code)
 	// Output: 400
 }
 
 func ExampleMetricsHandler_ListMetrics() {
-	router := exampleRouter()
+	router, err := exampleRouter()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	exampleRequest(router, http.MethodPost, "/update/", `{"id":"Alloc","type":"gauge","value":12.5}`)
 	response := exampleRequest(router, http.MethodGet, "/", "")
 	fmt.Println(response.Code)
