@@ -265,3 +265,21 @@ p.Put(metric) // вызывает сгенерированный Reset() пер�
 обращаться к объекту и его изменяемым данным или повторно возвращать тот же объект.
 Пул создаётся через `New` и не копируется после начала использования. Как и
 `sync.Pool`, он может в любой момент удалить сохранённые объекты.
+
+## Информация о сборке
+
+При запуске сервер и агент выводят в stdout версию, дату и коммит сборки.
+Для каждого незаданного значения выводится `N/A`:
+
+```text
+Build version: N/A
+Build date: N/A
+Build commit: N/A
+```
+
+Значения передаются при сборке через `-ldflags -X` (одинаково для обоих приложений):
+
+```sh
+go build -ldflags "-X main.buildVersion=v1.0.0 -X main.buildDate=2026-11-05 -X main.buildCommit=abc123" -o /tmp/metrics-server ./cmd/server
+go build -ldflags "-X main.buildVersion=v1.0.0 -X main.buildDate=2026-11-05 -X main.buildCommit=abc123" -o /tmp/metrics-agent ./cmd/agent
+```

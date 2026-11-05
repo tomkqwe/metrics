@@ -16,6 +16,14 @@ import (
 	"github.com/tomkqwe/metrics/internal/agent/collector"
 	"github.com/tomkqwe/metrics/internal/agent/sender"
 	"github.com/tomkqwe/metrics/internal/agent/storage"
+	"github.com/tomkqwe/metrics/internal/buildinfo"
+)
+
+// Build metadata is set at link time using -ldflags -X.
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
 )
 
 const (
@@ -42,6 +50,8 @@ type envConfig struct {
 }
 
 func main() {
+	buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit)
+
 	cfg, err := parseConfig(os.Args[1:])
 	if err != nil {
 		os.Exit(1)
