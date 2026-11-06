@@ -21,9 +21,9 @@ import (
 
 // Build metadata is set at link time using -ldflags -X.
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 const (

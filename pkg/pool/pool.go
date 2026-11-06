@@ -14,18 +14,30 @@ type Pool[T interface{ Reset() }] struct {
 }
 
 // New creates a pool using newObject whenever no cached object is available.
-// newObject must be non-nil, safe for concurrent calls, and return a fresh,
+// If newObject is nil, Get returns the zero value of T when the pool is empty.
+// A non-nil newObject must be safe for concurrent calls and return a fresh,
 // ready-to-use object on each call (normally a non-nil pointer to a struct).
 func New[T interface{ Reset() }](newObject func() T) *Pool[T] {
 	return &Pool[T]{
-		items: sync.Pool{New: func() any { return newObject() }},
+		items: sync.Pool{New: func() any {
+			if newObject == nil {
+				var zero T
+				return zero
+			}
+			return newObject()
+		}},
 	}
 }
 
 // Get returns a cached object or creates one using the factory passed to New.
 // The caller exclusively owns the object until it is returned with Put.
 func (p *Pool[T]) Get() T {
-	return p.items.Get().(T)
+	obj := p.items.Get()
+	if obj == nil {
+		var zero T
+		return zero
+	}
+	return obj.(T)
 }
 
 // Put resets obj before making it available for reuse. The caller must not use

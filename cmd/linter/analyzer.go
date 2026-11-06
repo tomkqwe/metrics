@@ -7,9 +7,9 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// Analyzer forbids builtin panic and restricts log.Fatal, log.Fatalf,
+// analyzer forbids builtin panic and restricts log.Fatal, log.Fatalf,
 // log.Fatalln and os.Exit to the main function of package main.
-var Analyzer = &analysis.Analyzer{
+var analyzer = &analysis.Analyzer{
 	Name: "noexit",
 	Doc:  "report panic and process termination outside the main function of package main",
 	Run:  run,

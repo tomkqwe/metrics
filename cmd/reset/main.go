@@ -89,7 +89,7 @@ func marked(group *ast.CommentGroup) bool {
 }
 
 func render(pkg *packages.Package) (string, []byte, error) {
-	var body strings.Builder
+	var methods []resetMethod
 	var output string
 	for _, file := range pkg.Syntax {
 		filename := pkg.Fset.Position(file.Pos()).Filename
@@ -127,7 +127,7 @@ func render(pkg *packages.Package) (string, []byte, error) {
 					}
 					receiver += "[" + strings.Join(params, ", ") + "]"
 				}
-				fmt.Fprintf(&body, "// Reset clears %s while retaining slices, maps and pointers.\nfunc (rs *%s) Reset() {\nif rs == nil { return }\n", ts.Name.Name, receiver)
+				var body strings.Builder
 				st := named.Underlying().(*types.Struct)
 				for i := 0; i < st.NumFields(); i++ {
 					field := st.Field(i)
@@ -135,14 +135,18 @@ func render(pkg *packages.Package) (string, []byte, error) {
 						emitReset(&body, "rs."+field.Name(), field.Type(), 0)
 					}
 				}
-				body.WriteString("}\n\n")
+				methods = append(methods, resetMethod{Name: ts.Name.Name, Receiver: receiver, Body: body.String()})
 			}
 		}
 	}
 	if output == "" {
 		return "", nil, nil
 	}
-	data, err := format.Source([]byte(generatedHeader + "\npackage " + pkg.Name + "\n\n" + body.String()))
+	source, err := renderFile(pkg.Name, methods)
+	if err != nil {
+		return "", nil, err
+	}
+	data, err := format.Source(source)
 	if err != nil {
 		return "", nil, fmt.Errorf("format %s: %w", output, err)
 	}

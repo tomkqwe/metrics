@@ -111,3 +111,28 @@ func TestPoolWithGeneratedReset(t *testing.T) {
 	}
 	p.Put(clean)
 }
+
+func TestPoolNilFactory(t *testing.T) {
+	t.Run("pointer", func(t *testing.T) {
+		p := pool.New[*object](nil)
+		if got := p.Get(); got != nil {
+			t.Fatalf("Get() = %v, want nil", got)
+		}
+	})
+	t.Run("interface", func(t *testing.T) {
+		p := pool.New[interface{ Reset() }](nil)
+		if got := p.Get(); got != nil {
+			t.Fatalf("Get() = %v, want nil", got)
+		}
+	})
+	t.Run("value", func(t *testing.T) {
+		p := pool.New[valueObject](nil)
+		if got := p.Get(); got != (valueObject{}) {
+			t.Fatalf("Get() = %v, want zero value", got)
+		}
+	})
+}
+
+type valueObject struct{ number int }
+
+func (valueObject) Reset() {}
