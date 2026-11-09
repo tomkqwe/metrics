@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/tomkqwe/metrics/internal/audit"
+	"github.com/tomkqwe/metrics/internal/buildinfo"
 	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
@@ -27,6 +28,13 @@ import (
 	"github.com/tomkqwe/metrics/internal/repository/memstorage"
 	"github.com/tomkqwe/metrics/internal/repository/postgres"
 	"github.com/tomkqwe/metrics/internal/service"
+)
+
+// Build metadata is set at link time using -ldflags -X.
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 const (
@@ -47,6 +55,8 @@ type config struct {
 }
 
 func main() {
+	buildinfo.Print(os.Stdout, buildVersion, buildDate, buildCommit)
+
 	cfg, err := parseConfig(os.Args[1:])
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "parse config: %v\n", err)
