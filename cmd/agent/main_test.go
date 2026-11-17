@@ -110,7 +110,7 @@ func TestParseConfigRejectsInvalidRateLimit(t *testing.T) {
 func unsetAgentEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"CRYPTO_KEY", "ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT"} {
+	for _, key := range []string{"CONFIG", "STORE_FILE", "CRYPTO_KEY", "ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)

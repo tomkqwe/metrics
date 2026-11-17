@@ -17,6 +17,7 @@ import (
 	"github.com/tomkqwe/metrics/internal/agent/sender"
 	"github.com/tomkqwe/metrics/internal/agent/storage"
 	"github.com/tomkqwe/metrics/internal/buildinfo"
+	configfile "github.com/tomkqwe/metrics/internal/config"
 	"github.com/tomkqwe/metrics/internal/encryption"
 )
 
@@ -57,6 +58,7 @@ func main() {
 
 	cfg, err := parseConfig(os.Args[1:])
 	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "parse config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -72,16 +74,16 @@ func main() {
 }
 
 func parseConfig(args []string) (config, error) {
-	var cfg config
-
-	var pollInterval int
-	var reportInterval int
+	cfg := config{pollInterval: defaultPollIntervalSeconds * time.Second, reportInterval: defaultReportIntervalSeconds * time.Second}
+	var configPath string
 
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	flags.StringVar(&configPath, "c", "", "JSON configuration file path")
+	flags.StringVar(&configPath, "config", "", "JSON configuration file path")
 	flags.StringVar(&cfg.serverAddress, "a", defaultServerAddress, "HTTP server address")
-	flags.IntVar(&reportInterval, "r", defaultReportIntervalSeconds, "metrics report interval in seconds")
-	flags.IntVar(&pollInterval, "p", defaultPollIntervalSeconds, "metrics poll interval in seconds")
+	flags.Var((*configfile.Duration)(&cfg.reportInterval), "r", "metrics report interval in seconds")
+	flags.Var((*configfile.Duration)(&cfg.pollInterval), "p", "metrics poll interval in seconds")
 	flags.StringVar(&cfg.cryptoKey, "crypto-key", "", "RSA public key PEM file path")
 	flags.StringVar(&cfg.key, "k", cfg.key, "SHA256 hash key")
 	flags.IntVar(&cfg.rateLimit, "l", defaultRateLimit, "maximum number of concurrent outgoing requests")
@@ -90,8 +92,20 @@ func parseConfig(args []string) (config, error) {
 		return config{}, err
 	}
 
-	cfg.pollInterval = time.Duration(pollInterval) * time.Second
-	cfg.reportInterval = time.Duration(reportInterval) * time.Second
+	// Parse once to discover the file, then replay explicit flags over its values.
+	if err := configfile.Load(configPath, &struct {
+		Address        *string              `json:"address"`
+		PollInterval   *configfile.Duration `json:"poll_interval"`
+		ReportInterval *configfile.Duration `json:"report_interval"`
+		Key            *string              `json:"key"`
+		CryptoKey      *string              `json:"crypto_key"`
+		RateLimit      *int                 `json:"rate_limit"`
+	}{&cfg.serverAddress, (*configfile.Duration)(&cfg.pollInterval), (*configfile.Duration)(&cfg.reportInterval), &cfg.key, &cfg.cryptoKey, &cfg.rateLimit}); err != nil {
+		return config{}, err
+	}
+	if err := flags.Parse(args); err != nil {
+		return config{}, err
+	}
 
 	var eCfg envConfig
 	if err := env.Parse(&eCfg); err != nil {

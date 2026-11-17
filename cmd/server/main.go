@@ -21,6 +21,7 @@ import (
 
 	"github.com/tomkqwe/metrics/internal/audit"
 	"github.com/tomkqwe/metrics/internal/buildinfo"
+	configfile "github.com/tomkqwe/metrics/internal/config"
 	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/encryption"
 	"github.com/tomkqwe/metrics/internal/handler"
@@ -190,8 +191,11 @@ func parseConfig(args []string) (config, error) {
 		Restore:       defaultRestore,
 	}
 
+	var configPath string
 	flags := flag.NewFlagSet("server", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
+	flags.StringVar(&configPath, "c", "", "JSON configuration file path")
+	flags.StringVar(&configPath, "config", "", "JSON configuration file path")
 	flags.StringVar(&cfg.AuditFile, "audit-file", "", "audit log file path")
 	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
 	flags.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
@@ -206,6 +210,27 @@ func parseConfig(args []string) (config, error) {
 		return config{}, err
 	}
 
+	// Replay explicit flags after loading the file so defaults never mask file values.
+	if err := configfile.Load(configPath, &struct {
+		Address       *string              `json:"address"`
+		Restore       *bool                `json:"restore"`
+		StoreInterval *configfile.Duration `json:"store_interval"`
+		StoreFile     *string              `json:"store_file"`
+		DatabaseDSN   *string              `json:"database_dsn"`
+		CryptoKey     *string              `json:"crypto_key"`
+		Key           *string              `json:"key"`
+		AuditFile     *string              `json:"audit_file"`
+		AuditURL      *string              `json:"audit_url"`
+	}{&cfg.ServerAddress, &cfg.Restore, (*configfile.Duration)(&cfg.StoreInterval), &cfg.FileStoragePath, &cfg.DatabaseDSN, &cfg.CryptoKey, &cfg.Key, &cfg.AuditFile, &cfg.AuditURL}); err != nil {
+		return config{}, err
+	}
+	if err := flags.Parse(args); err != nil {
+		return config{}, err
+	}
+	// Retain FILE_STORAGE_PATH compatibility; it takes precedence over STORE_FILE.
+	if value, ok := os.LookupEnv("STORE_FILE"); ok {
+		cfg.FileStoragePath = value
+	}
 	if err := env.ParseWithFuncs(&cfg, env.CustomParsers{
 		reflect.TypeOf(time.Duration(0)): parseDurationSecondsEnv,
 	}); err != nil {
