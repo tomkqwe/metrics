@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"errors"
 	"flag"
@@ -21,6 +22,7 @@ import (
 	"github.com/tomkqwe/metrics/internal/audit"
 	"github.com/tomkqwe/metrics/internal/buildinfo"
 	"github.com/tomkqwe/metrics/internal/database"
+	"github.com/tomkqwe/metrics/internal/encryption"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
@@ -52,6 +54,7 @@ type config struct {
 	Restore         bool          `env:"RESTORE"`
 	DatabaseDSN     string        `env:"DATABASE_DSN"`
 	Key             string        `env:"KEY"`
+	CryptoKey       string        `env:"CRYPTO_KEY"`
 }
 
 func main() {
@@ -83,6 +86,10 @@ func main() {
 }
 
 func run(ctx context.Context, cfg config, logger *zap.Logger) error {
+	privateKey, err := encryption.LoadPrivateKey(cfg.CryptoKey)
+	if err != nil {
+		return fmt.Errorf("load server crypto key: %w", err)
+	}
 	db, err := database.OpenPostgres(cfg.DatabaseDSN)
 	if err != nil {
 		return fmt.Errorf("open postgres: %w", err)
@@ -135,7 +142,7 @@ func run(ctx context.Context, cfg config, logger *zap.Logger) error {
 		}
 		observers = append(observers, observer)
 	}
-	handler, err := newServerHandler(logger, metricService, db, cfg.Key, observers...)
+	handler, err := newServerHandlerWithCrypto(logger, metricService, db, cfg.Key, privateKey, observers...)
 	if err != nil {
 		return fmt.Errorf("create server handler: %w", err)
 	}
@@ -192,6 +199,7 @@ func parseConfig(args []string) (config, error) {
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
 	flags.BoolVar(&cfg.Restore, "r", cfg.Restore, "restore metrics from storage file")
 	flags.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL database DSN")
+	flags.StringVar(&cfg.CryptoKey, "crypto-key", "", "RSA private key PEM file path")
 	flags.StringVar(&cfg.Key, "k", cfg.Key, "SHA256 hash key")
 
 	if err := flags.Parse(args); err != nil {
@@ -247,9 +255,14 @@ func parseDurationSeconds(value string) (time.Duration, error) {
 }
 
 func newServerHandler(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, observers ...audit.Observer) (*serverHandler, error) {
+	return newServerHandlerWithCrypto(logger, srv, databasePinger, key, nil, observers...)
+}
+
+func newServerHandlerWithCrypto(logger *zap.Logger, srv service.Service, databasePinger handler.DatabasePinger, key string, privateKey *rsa.PrivateKey, observers ...audit.Observer) (*serverHandler, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.WithLogging(logger))
 	router.Use(middleware.WithHashSHA256(key))
+	router.Use(middleware.WithDecryption(privateKey))
 	router.Use(middleware.WithGzip)
 
 	metricsHandler, err := handler.NewMetricsHandler(srv, logger, observers...)

@@ -284,3 +284,38 @@ Build commit: N/A
 go build -ldflags "-X main.buildVersion=v1.0.0 -X main.buildDate=2026-11-05 -X main.buildCommit=abc123" -o /tmp/metrics-server ./cmd/server
 go build -ldflags "-X main.buildVersion=v1.0.0 -X main.buildDate=2026-11-05 -X main.buildCommit=abc123" -o /tmp/metrics-agent ./cmd/agent
 ```
+
+## Шифрование сообщений агента
+
+Параметр `-crypto-key` или переменная `CRYPTO_KEY` задаёт путь к PEM-файлу:
+публичный RSA-ключ для агента, приватный RSA-ключ для сервера. Переменная
+окружения имеет приоритет над флагом. Ключи загружаются при запуске;
+недоступный файл или неверный формат приводит к ошибке запуска.
+
+Пример создания ключей и запуска (сервер и агент — в отдельных терминалах):
+
+```sh
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+chmod 600 private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+
+go run ./cmd/server -crypto-key private.pem
+go run ./cmd/agent -crypto-key public.pem
+```
+
+Поддерживаются RSA-ключи от 2048 бит: публичные PKIX/PKCS#1 и приватные
+PKCS#8/PKCS#1 без пароля. Приватный ключ хранится только на сервере.
+
+Агент сжимает JSON с помощью gzip, затем шифрует AES-256-GCM со случайными
+ключом и nonce для каждого сообщения. Ключ AES шифруется RSA-OAEP/SHA-256.
+Заголовок `X-Metrics-Encryption: rsa-oaep-aes-256-gcm-v1` обозначает формат тела:
+RSA-блок с ключом AES, 12 байт nonce, шифротекст с 16-байтным тегом GCM.
+В качестве OAEP label и GCM AAD используется строка версии из заголовка.
+При включённом `-k` HMAC вычисляется по зашифрованному телу. Сервер проверяет
+HMAC, расшифровывает тело и затем распаковывает gzip. Повреждённые зашифрованные
+запросы, неизвестная схема и зашифрованные запросы без приватного ключа
+получают HTTP 400.
+
+Без ключа агент отправляет сообщения в прежнем формате. Сервер сохраняет
+поддержку незашифрованных запросов, в том числе при настроенном ключе.
+Ответы сервера этим механизмом не шифруются.
