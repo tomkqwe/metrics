@@ -64,6 +64,10 @@ func (s *FileStorage) Save(metrics []models.Metric) error {
 		_ = tmpFile.Close()
 		return fmt.Errorf("encode metrics storage file: %w", err)
 	}
+	if err = tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("sync metrics storage file: %w", err)
+	}
 	if err = tmpFile.Close(); err != nil {
 		return fmt.Errorf("close metrics storage file: %w", err)
 	}

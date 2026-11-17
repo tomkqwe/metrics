@@ -76,7 +76,7 @@ func main() {
 		_ = logger.Sync()
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	err = run(ctx, cfg, logger)
 	stop()
 	if err != nil {
@@ -86,7 +86,7 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, cfg config, logger *zap.Logger) error {
+func run(ctx context.Context, cfg config, logger *zap.Logger) (runErr error) {
 	privateKey, err := encryption.LoadPrivateKey(cfg.CryptoKey)
 	if err != nil {
 		return fmt.Errorf("load server crypto key: %w", err)
@@ -121,7 +121,13 @@ func run(ctx context.Context, cfg config, logger *zap.Logger) error {
 	}
 
 	stopSave := startPeriodicSave(context.Background(), cfg.StoreInterval, storage, fileStorage, logger)
-	defer stopSave()
+	defer func() {
+		// No periodic writer may overwrite the final snapshot with stale data.
+		stopSave()
+		if err := saveSnapshot(storage, fileStorage); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("save final metrics: %w", err))
+		}
+	}()
 
 	var observers []audit.Observer
 	if cfg.AuditFile != "" {
@@ -372,4 +378,16 @@ func startPeriodicSave(
 		}
 	}()
 	return func() { cancel(); <-done }
+}
+
+// saveSnapshot uses a fresh context after all HTTP handlers have drained.
+func saveSnapshot(storage repository.Storage, fileStorage *filestorage.FileStorage) error {
+	if fileStorage == nil {
+		return nil
+	}
+	metrics, err := storage.Snapshot(context.Background())
+	if err != nil {
+		return err
+	}
+	return fileStorage.Save(metrics)
 }

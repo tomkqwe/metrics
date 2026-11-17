@@ -67,10 +67,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
-	app.Run(ctx)
+	if err := app.Run(ctx); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func parseConfig(args []string) (config, error) {
