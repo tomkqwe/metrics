@@ -10,16 +10,19 @@ import (
 )
 
 // WithDecryption opens encrypted requests before gzip decoding. Unmarked requests
-// remain supported; an encrypted request without a configured key is rejected.
+// remain supported. A nil key disables the middleware entirely.
 func WithDecryption(key *rsa.PrivateKey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
+		if key == nil {
+			return next
+		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			scheme := r.Header.Get(encryption.Header)
 			if scheme == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
-			if scheme != encryption.Scheme || key == nil {
+			if scheme != encryption.Scheme {
 				http.Error(w, "unsupported encryption", http.StatusBadRequest)
 				return
 			}

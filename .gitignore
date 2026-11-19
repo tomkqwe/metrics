@@ -23,3 +23,9 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+
+# Local configuration files (may contain credentials)
+config.json
+*.config.json
+agent.json
+server.json

@@ -13,18 +13,19 @@ func TestDecryptionWithoutKey(t *testing.T) {
 	for _, scheme := range []string{"", encryption.Scheme, "unknown"} {
 		t.Run(scheme, func(t *testing.T) {
 			called := false
-			h := WithDecryption(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }))
+			next := http.NewServeMux()
+			next.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) })
+			h := WithDecryption(nil)(next)
+			if h != next {
+				t.Fatal("middleware without key must return the original handler")
+			}
 			req := httptest.NewRequest(http.MethodPost, "/updates/", strings.NewReader("body"))
 			if scheme != "" {
 				req.Header.Set(encryption.Header, scheme)
 			}
 			response := httptest.NewRecorder()
 			h.ServeHTTP(response, req)
-			want := http.StatusBadRequest
-			if scheme == "" {
-				want = http.StatusNoContent
-			}
-			if response.Code != want || called != (scheme == "") {
+			if response.Code != http.StatusNoContent || !called {
 				t.Fatalf("status %d, called %v", response.Code, called)
 			}
 		})
