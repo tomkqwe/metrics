@@ -4,6 +4,7 @@ package sender
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomkqwe/metrics/internal/encryption"
 	"github.com/tomkqwe/metrics/internal/gziputil"
 	models "github.com/tomkqwe/metrics/internal/model"
 	"github.com/tomkqwe/metrics/internal/retry"
@@ -33,16 +35,22 @@ type HTTPSender struct {
 	client      *http.Client
 	retryDelays []time.Duration
 	key         string
+	publicKey   *rsa.PublicKey
 }
 
 // HTTPSenderOption configures an HTTP sender.
 type HTTPSenderOption func(*HTTPSender)
 
-// WithKey enables HMAC-SHA256 signing of the compressed request body.
+// WithKey enables HMAC-SHA256 signing of the transmitted request body.
 func WithKey(key string) HTTPSenderOption {
 	return func(s *HTTPSender) {
 		s.key = key
 	}
+}
+
+// WithPublicKey enables encryption of compressed request bodies.
+func WithPublicKey(key *rsa.PublicKey) HTTPSenderOption {
+	return func(s *HTTPSender) { s.publicKey = key }
 }
 
 // NewHTTPSender creates a sender using http.DefaultClient.
@@ -92,6 +100,13 @@ func (s *HTTPSender) Send(ctx context.Context, metrics []models.Metric) error {
 		return err
 	}
 
+	if s.publicKey != nil {
+		body, err = encryption.Encrypt(s.publicKey, body)
+		if err != nil {
+			return fmt.Errorf("encrypt metrics: %w", err)
+		}
+	}
+
 	return retry.DoWithDelays(ctx, s.retryDelays, func() error {
 		return s.sendCompressedBody(ctx, body)
 	}, isRetriableSendError)
@@ -109,6 +124,9 @@ func (s *HTTPSender) sendCompressedBody(ctx context.Context, body []byte) error 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Accept-Encoding", "gzip")
+	if s.publicKey != nil {
+		req.Header.Set(encryption.Header, encryption.Scheme)
+	}
 	if s.key != "" {
 		req.Header.Set(signature.Header, signature.Calculate(body, s.key))
 	}

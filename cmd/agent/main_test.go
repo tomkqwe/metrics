@@ -110,7 +110,7 @@ func TestParseConfigRejectsInvalidRateLimit(t *testing.T) {
 func unsetAgentEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT"} {
+	for _, key := range []string{"CONFIG", "STORE_FILE", "CRYPTO_KEY", "ADDRESS", "POLL_INTERVAL", "REPORT_INTERVAL", "KEY", "RATE_LIMIT"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)
@@ -122,5 +122,24 @@ func unsetAgentEnv(t *testing.T) {
 			}
 			_ = os.Unsetenv(key)
 		})
+	}
+}
+
+func TestCryptoKeyConfig(t *testing.T) {
+	unsetAgentEnv(t)
+	cfg, err := parseConfig([]string{"-crypto-key", "flag.pem"})
+	if err != nil || cfg.cryptoKey != "flag.pem" {
+		t.Fatalf("flag: %v, %v", cfg, err)
+	}
+	t.Setenv("CRYPTO_KEY", "env.pem")
+	cfg, err = parseConfig([]string{"-crypto-key", "flag.pem"})
+	if err != nil || cfg.cryptoKey != "env.pem" {
+		t.Fatalf("env: %v, %v", cfg, err)
+	}
+}
+
+func TestNewAgentRejectsMissingCryptoKey(t *testing.T) {
+	if _, err := newAgent(config{cryptoKey: t.TempDir() + "/missing.pem"}); err == nil {
+		t.Fatal("expected missing crypto key error")
 	}
 }

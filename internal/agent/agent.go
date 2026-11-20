@@ -102,34 +102,29 @@ func (a *Agent) ReportOnce(ctx context.Context) error {
 	return a.sender.Send(ctx, a.storage.Snapshot())
 }
 
-// Run collects and reports until ctx is cancelled, then waits for its workers.
+// Run stops collection on cancellation, drains active reports, then sends the
+// final snapshot. Delivery contexts survive cancellation so accepted work can
+// finish. A final delivery failure is returned to the caller.
 // A nil context is replaced with context.Background.
-func (a *Agent) Run(ctx context.Context) {
+func (a *Agent) Run(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	reportJobs, stopPipeline := a.startPipeline(ctx)
-	defer stopPipeline()
-
-	a.runReportLoop(ctx, reportJobs)
-}
-
-func (a *Agent) startPipeline(ctx context.Context) (chan<- []models.Metric, func()) {
+	deliveryCtx := context.WithoutCancel(ctx)
 	reportJobs := make(chan []models.Metric)
-	var wg sync.WaitGroup
-
+	var collectors, workers sync.WaitGroup
 	for _, collector := range a.collectors {
-		a.startCollector(ctx, &wg, collector)
+		a.startCollector(ctx, &collectors, collector)
 	}
-	a.startReportWorkers(ctx, &wg, reportJobs)
+	a.startReportWorkers(deliveryCtx, &workers, reportJobs)
+	a.runReportLoop(ctx, reportJobs)
 
-	stop := func() {
-		close(reportJobs)
-		wg.Wait()
-	}
-
-	return reportJobs, stop
+	// Finish any collection already in progress before taking the final snapshot.
+	collectors.Wait()
+	close(reportJobs)
+	workers.Wait()
+	// Send last, so an older in-flight gauge cannot overwrite the final value.
+	return a.ReportOnce(deliveryCtx)
 }
 
 func (a *Agent) runReportLoop(ctx context.Context, reportJobs chan<- []models.Metric) {
@@ -160,6 +155,9 @@ func (a *Agent) startCollector(ctx context.Context, wg *sync.WaitGroup, collecto
 		defer pollTicker.Stop()
 
 		for {
+			if ctx.Err() != nil {
+				return
+			}
 			a.pollOnce(collector)
 			select {
 			case <-ctx.Done():

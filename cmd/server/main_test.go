@@ -237,7 +237,7 @@ func TestNewServerStorageReturnsErrorWhenDatabaseDSNConfiguredWithoutDB(t *testi
 func unsetServerEnv(t *testing.T) {
 	t.Helper()
 
-	for _, key := range []string{"ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL"} {
+	for _, key := range []string{"CONFIG", "STORE_FILE", "CRYPTO_KEY", "ADDRESS", "STORE_INTERVAL", "FILE_STORAGE_PATH", "RESTORE", "DATABASE_DSN", "KEY", "AUDIT_FILE", "AUDIT_URL"} {
 		oldValue, ok := os.LookupEnv(key)
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset env %s: %v", key, err)
@@ -249,5 +249,18 @@ func unsetServerEnv(t *testing.T) {
 			}
 			_ = os.Unsetenv(key)
 		})
+	}
+}
+
+func TestCryptoKeyConfig(t *testing.T) {
+	unsetServerEnv(t)
+	cfg, err := parseConfig([]string{"-crypto-key", "flag.pem"})
+	if err != nil || cfg.CryptoKey != "flag.pem" {
+		t.Fatalf("flag: %v, %v", cfg, err)
+	}
+	t.Setenv("CRYPTO_KEY", "env.pem")
+	cfg, err = parseConfig([]string{"-crypto-key", "flag.pem"})
+	if err != nil || cfg.CryptoKey != "env.pem" {
+		t.Fatalf("env: %v, %v", cfg, err)
 	}
 }
