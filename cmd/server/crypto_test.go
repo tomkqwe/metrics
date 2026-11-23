@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +29,11 @@ func TestEncryptedAgentServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := newServerHandlerWithCrypto(zap.NewNop(), svc, nil, "shared", key)
+	_, subnet, err := net.ParseCIDR("127.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := newServerHandlerWithCrypto(zap.NewNop(), svc, nil, "shared", key, subnet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +63,7 @@ func TestEncryptedAgentServer(t *testing.T) {
 	}
 	for _, body := range [][]byte{[]byte("garbage"), wire[:len(wire)-1]} {
 		req := httptest.NewRequest(http.MethodPost, "/updates/", bytes.NewReader(body))
+		req.Header.Set("X-Real-IP", "127.0.0.1")
 		req.Header.Set(encryption.Header, encryption.Scheme)
 		response := httptest.NewRecorder()
 		h.ServeHTTP(response, req)

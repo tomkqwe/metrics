@@ -18,8 +18,8 @@ func writeServerConfig(t *testing.T, data string) string {
 
 func TestServerJSONConfig(t *testing.T) {
 	unsetServerEnv(t)
-	path := writeServerConfig(t, `{"address":"file:8081","restore":false,"store_interval":"500ms","store_file":"metrics.db","database_dsn":"dsn","crypto_key":"private.pem","key":"secret","audit_file":"audit.log","audit_url":"http://audit"}`)
-	want := config{ServerAddress: "file:8081", Restore: false, StoreInterval: 500 * time.Millisecond, FileStoragePath: "metrics.db", DatabaseDSN: "dsn", CryptoKey: "private.pem", Key: "secret", AuditFile: "audit.log", AuditURL: "http://audit"}
+	path := writeServerConfig(t, `{"address":"file:8081","restore":false,"store_interval":"500ms","store_file":"metrics.db","database_dsn":"dsn","crypto_key":"private.pem","key":"secret","audit_file":"audit.log","audit_url":"http://audit","trusted_subnet":"10.0.0.0/8"}`)
+	want := config{ServerAddress: "file:8081", Restore: false, StoreInterval: 500 * time.Millisecond, FileStoragePath: "metrics.db", DatabaseDSN: "dsn", CryptoKey: "private.pem", Key: "secret", AuditFile: "audit.log", AuditURL: "http://audit", TrustedSubnet: "10.0.0.0/8"}
 	for _, flag := range []string{"-c", "-config"} {
 		cfg, err := parseConfig([]string{flag, path})
 		if err != nil || cfg != want {
@@ -35,24 +35,25 @@ func TestServerJSONConfig(t *testing.T) {
 
 func TestServerJSONPrecedence(t *testing.T) {
 	unsetServerEnv(t)
-	path := writeServerConfig(t, `{"address":"file","restore":true,"store_interval":"500ms","store_file":"metrics.db","database_dsn":"dsn","crypto_key":"private.pem","key":"secret","audit_file":"audit.log","audit_url":"http://audit"}`)
-	args := []string{"-config", path, "-a", "flag", "-r=false", "-i", "0", "-f=", "-d=", "-crypto-key=", "-k=", "-audit-file=", "-audit-url="}
-	want := config{ServerAddress: "flag"}
+	path := writeServerConfig(t, `{"address":"file","restore":true,"store_interval":"500ms","store_file":"metrics.db","database_dsn":"dsn","crypto_key":"private.pem","key":"secret","audit_file":"audit.log","audit_url":"http://audit","trusted_subnet":"10.0.0.0/8"}`)
+	args := []string{"-config", path, "-a", "flag", "-r=false", "-i", "0", "-f=", "-d=", "-crypto-key=", "-k=", "-audit-file=", "-audit-url=", "-t", "192.0.2.0/24"}
+	want := config{ServerAddress: "flag", TrustedSubnet: "192.0.2.0/24"}
 	cfg, err := parseConfig(args)
 	if err != nil || cfg != want {
 		t.Fatalf("flags: %+v, %v; want %+v", cfg, err, want)
 	}
-	for name, value := range map[string]string{"ADDRESS": "env", "RESTORE": "true", "STORE_INTERVAL": "2", "STORE_FILE": "env.db", "DATABASE_DSN": "env-dsn", "CRYPTO_KEY": "env.pem", "KEY": "env-key", "AUDIT_FILE": "env.log", "AUDIT_URL": "http://env"} {
+	for name, value := range map[string]string{"ADDRESS": "env", "RESTORE": "true", "STORE_INTERVAL": "2", "STORE_FILE": "env.db", "DATABASE_DSN": "env-dsn", "CRYPTO_KEY": "env.pem", "KEY": "env-key", "AUDIT_FILE": "env.log", "AUDIT_URL": "http://env", "TRUSTED_SUBNET": "2001:db8::/32"} {
 		t.Setenv(name, value)
 	}
-	want = config{ServerAddress: "env", Restore: true, StoreInterval: 2 * time.Second, FileStoragePath: "env.db", DatabaseDSN: "env-dsn", CryptoKey: "env.pem", Key: "env-key", AuditFile: "env.log", AuditURL: "http://env"}
+	want = config{ServerAddress: "env", Restore: true, StoreInterval: 2 * time.Second, FileStoragePath: "env.db", DatabaseDSN: "env-dsn", CryptoKey: "env.pem", Key: "env-key", AuditFile: "env.log", AuditURL: "http://env", TrustedSubnet: "2001:db8::/32"}
 	cfg, err = parseConfig(args)
 	if err != nil || cfg != want {
 		t.Fatalf("env: %+v, %v; want %+v", cfg, err, want)
 	}
+	t.Setenv("TRUSTED_SUBNET", "")
 	t.Setenv("FILE_STORAGE_PATH", "legacy.db")
 	cfg, err = parseConfig(args)
-	if err != nil || cfg.FileStoragePath != "legacy.db" {
+	if err != nil || cfg.FileStoragePath != "legacy.db" || cfg.TrustedSubnet != "" {
 		t.Fatalf("legacy env: %+v, %v", cfg, err)
 	}
 }
