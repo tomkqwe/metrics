@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +20,10 @@ import (
 func TestHTTPSenderSendPostsMetrics(t *testing.T) {
 	var requests []receivedRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil || r.Header.Get("X-Real-IP") != host {
+			t.Errorf("X-Real-IP = %q, peer = %q", r.Header.Get("X-Real-IP"), r.RemoteAddr)
+		}
 		reader, err := gzip.NewReader(r.Body)
 		if err != nil {
 			t.Fatalf("create gzip reader: %v", err)
@@ -153,7 +158,7 @@ func TestHTTPSenderSendAddsHashHeader(t *testing.T) {
 
 func TestHTTPSenderRetriesTransportErrors(t *testing.T) {
 	attempts := 0
-	s := NewHTTPSenderWithClient("http://example.com", &http.Client{
+	s := NewHTTPSenderWithClient("http://127.0.0.1", &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			attempts++
 			if attempts < 4 {
@@ -187,7 +192,7 @@ func TestHTTPSenderRetriesTransportErrors(t *testing.T) {
 
 func TestHTTPSenderStopsAfterRetryLimit(t *testing.T) {
 	attempts := 0
-	s := NewHTTPSenderWithClient("http://example.com", &http.Client{
+	s := NewHTTPSenderWithClient("http://127.0.0.1", &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			attempts++
 			return nil, errors.New("connection refused")

@@ -36,6 +36,7 @@ const (
 )
 
 type config struct {
+	grpcAddress    string
 	serverAddress  string
 	pollInterval   time.Duration
 	reportInterval time.Duration
@@ -62,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	app, err := newAgent(cfg)
+	app, closeSender, err := newAgent(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,7 +71,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
-	if err := app.Run(ctx); err != nil {
+	err = app.Run(ctx)
+	closeSender()
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -83,6 +86,7 @@ func parseConfig(args []string) (config, error) {
 	flags.SetOutput(os.Stderr)
 	flags.StringVar(&configPath, "c", "", "JSON configuration file path")
 	flags.StringVar(&configPath, "config", "", "JSON configuration file path")
+	flags.StringVar(&cfg.grpcAddress, "grpc-address", "", "gRPC server host:port (empty disables gRPC)")
 	flags.StringVar(&cfg.serverAddress, "a", defaultServerAddress, "HTTP server address")
 	flags.Var((*configfile.Duration)(&cfg.reportInterval), "r", "metrics report interval in seconds")
 	flags.Var((*configfile.Duration)(&cfg.pollInterval), "p", "metrics poll interval in seconds")
@@ -96,13 +100,14 @@ func parseConfig(args []string) (config, error) {
 
 	// Parse once to discover the file, then replay explicit flags over its values.
 	if err := configfile.Load(configPath, &struct {
+		GRPCAddress    *string              `json:"grpc_address"`
 		Address        *string              `json:"address"`
 		PollInterval   *configfile.Duration `json:"poll_interval"`
 		ReportInterval *configfile.Duration `json:"report_interval"`
 		Key            *string              `json:"key"`
 		CryptoKey      *string              `json:"crypto_key"`
 		RateLimit      *int                 `json:"rate_limit"`
-	}{&cfg.serverAddress, (*configfile.Duration)(&cfg.pollInterval), (*configfile.Duration)(&cfg.reportInterval), &cfg.key, &cfg.cryptoKey, &cfg.rateLimit}); err != nil {
+	}{&cfg.grpcAddress, &cfg.serverAddress, (*configfile.Duration)(&cfg.pollInterval), (*configfile.Duration)(&cfg.reportInterval), &cfg.key, &cfg.cryptoKey, &cfg.rateLimit}); err != nil {
 		return config{}, err
 	}
 	if err := flags.Parse(args); err != nil {
@@ -114,6 +119,9 @@ func parseConfig(args []string) (config, error) {
 		return config{}, fmt.Errorf("parse env config failed: %w", err)
 	}
 
+	if value, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.grpcAddress = value
+	}
 	if _, ok := os.LookupEnv("ADDRESS"); ok {
 		cfg.serverAddress = eCfg.ServerAddress
 	}
@@ -142,20 +150,37 @@ func parseConfig(args []string) (config, error) {
 	return cfg, nil
 }
 
-func newAgent(cfg config) (*agent.Agent, error) {
-	publicKey, err := encryption.LoadPublicKey(cfg.cryptoKey)
-	if err != nil {
-		return nil, fmt.Errorf("load agent crypto key: %w", err)
+func newAgent(cfg config) (*agent.Agent, func(), error) {
+	var transport agent.Sender
+	closeSender := func() {}
+	if cfg.grpcAddress != "" {
+		client, err := sender.NewGRPCSender(cfg.grpcAddress)
+		if err != nil {
+			return nil, nil, err
+		}
+		transport = client
+		closeSender = func() { _ = client.Close() }
+	} else {
+		publicKey, err := encryption.LoadPublicKey(cfg.cryptoKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("load agent crypto key: %w", err)
+		}
+		transport = sender.NewHTTPSender(serverURL(cfg.serverAddress), sender.WithKey(cfg.key), sender.WithPublicKey(publicKey))
 	}
-	return agent.NewAgent(
+	app, err := agent.NewAgent(
 		collector.NewRuntimeCollector(),
 		storage.NewMemoryStorage(),
-		sender.NewHTTPSender(serverURL(cfg.serverAddress), sender.WithKey(cfg.key), sender.WithPublicKey(publicKey)),
+		transport,
 		cfg.pollInterval,
 		cfg.reportInterval,
 		agent.WithAdditionalCollector(collector.NewSystemCollector()),
 		agent.WithRateLimit(cfg.rateLimit),
 	)
+	if err != nil {
+		closeSender()
+		return nil, nil, err
+	}
+	return app, closeSender, nil
 }
 
 func serverURL(address string) string {

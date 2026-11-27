@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -121,6 +123,11 @@ func (s *HTTPSender) sendCompressedBody(ctx context.Context, body []byte) error 
 	if err != nil {
 		return err
 	}
+	ip, err := localIPForServer(ctx, req.URL)
+	if err != nil {
+		return fmt.Errorf("%w: determine agent IP: %w", ErrTransport, err)
+	}
+	req.Header.Set("X-Real-IP", ip.String())
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Accept-Encoding", "gzip")
@@ -145,6 +152,29 @@ func (s *HTTPSender) sendCompressedBody(ctx context.Context, body []byte) error 
 	}
 
 	return nil
+}
+
+// localIPForServer finds the source IP for the route to the metrics server.
+func localIPForServer(ctx context.Context, server *url.URL) (net.IP, error) {
+	host := server.Hostname()
+	if ip := net.ParseIP(host); ip != nil && (ip.Equal(net.IPv4(127, 0, 0, 1)) || ip.Equal(net.IPv6loopback)) {
+		return ip, nil
+	}
+	// A UDP dial asks the OS to select a source address without sending a packet.
+	port := server.Port()
+	if port == "" {
+		port = "80"
+		if server.Scheme == "https" {
+			port = "443"
+		}
+	}
+	var dialer net.Dialer
+	conn, err := dialer.DialContext(ctx, "udp", net.JoinHostPort(host, port))
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP, nil
 }
 
 func (s *HTTPSender) metricsURL() string {
