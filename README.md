@@ -322,6 +322,23 @@ HMAC, расшифровывает тело и затем распаковыва
 поддержку незашифрованных запросов, в том числе при настроенном ключе.
 Ответы сервера этим механизмом не шифруются.
 
+## Передача батчей по gRPC
+
+Запустите сервер и агент в отдельных терминалах.
+
+```sh
+go run ./cmd/server -grpc-address 127.0.0.1:9090 -t 127.0.0.0/8
+go run ./cmd/agent -grpc-address 127.0.0.1:9090
+```
+
+Обе команды принимают адрес через `-grpc-address`, `GRPC_ADDRESS` или поле JSON `grpc_address`.
+По умолчанию адрес пуст и используется HTTP. При заданном адресе сервер открывает дополнительный порт,
+а агент передаёт каждый батч одним вызовом `metrics.Metrics/UpdateMetrics`. Принятые значения можно прочитать через HTTP.
+
+gRPC-соединение работает без TLS. Параметры подписи и RSA-шифрования тела запроса относятся к HTTP.
+Если задана доверенная подсеть, gRPC-сервер требует одно значение `x-real-ip` в метаданных и возвращает
+`PermissionDenied`, если IP отсутствует, некорректен или лежит вне подсети.
+
 ## JSON-конфигурация
 
 Сервер и агент принимают файл через `-c config.json`, `-config config.json`
@@ -355,6 +372,7 @@ cp agent.config.example.json agent.config.json
 ```json
 {
   "address": "localhost:8080",
+  "grpc_address": "",
   "restore": true,
   "store_interval": "1s",
   "store_file": "metrics.json",
@@ -374,6 +392,7 @@ cp agent.config.example.json agent.config.json
 ```json
 {
   "address": "localhost:8080",
+  "grpc_address": "",
   "report_interval": "10s",
   "poll_interval": "2s",
   "crypto_key": "",

@@ -25,6 +25,7 @@ import (
 	configfile "github.com/tomkqwe/metrics/internal/config"
 	"github.com/tomkqwe/metrics/internal/database"
 	"github.com/tomkqwe/metrics/internal/encryption"
+	"github.com/tomkqwe/metrics/internal/grpcserver"
 	"github.com/tomkqwe/metrics/internal/handler"
 	"github.com/tomkqwe/metrics/internal/middleware"
 	"github.com/tomkqwe/metrics/internal/repository"
@@ -32,6 +33,7 @@ import (
 	"github.com/tomkqwe/metrics/internal/repository/memstorage"
 	"github.com/tomkqwe/metrics/internal/repository/postgres"
 	"github.com/tomkqwe/metrics/internal/service"
+	"google.golang.org/grpc"
 )
 
 // Build metadata is set at link time using -ldflags -X.
@@ -48,6 +50,7 @@ const (
 )
 
 type config struct {
+	GRPCAddress     string
 	TrustedSubnet   string
 	AuditFile       string        `env:"AUDIT_FILE"`
 	AuditURL        string        `env:"AUDIT_URL"`
@@ -165,7 +168,29 @@ func run(ctx context.Context, cfg config, logger *zap.Logger) (runErr error) {
 	}
 	defer handler.Close()
 	server := &http.Server{Addr: cfg.ServerAddress, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second}
-	return serveUntilCancelled(ctx, server)
+	if cfg.GRPCAddress == "" {
+		return serveUntilCancelled(ctx, server)
+	}
+	listener, err := net.Listen("tcp", cfg.GRPCAddress)
+	if err != nil {
+		return fmt.Errorf("listen for gRPC: %w", err)
+	}
+	rpcServer := grpcserver.New(metricService, subnet)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		err := rpcServer.Serve(listener)
+		cancel()
+		result <- err
+	}()
+	httpErr := serveUntilCancelled(ctx, server)
+	rpcServer.GracefulStop()
+	rpcErr := <-result
+	if errors.Is(rpcErr, grpc.ErrServerStopped) {
+		rpcErr = nil
+	}
+	return errors.Join(httpErr, rpcErr)
 }
 
 // serveUntilCancelled stops accepting requests and drains active handlers on
@@ -214,6 +239,7 @@ func parseConfig(args []string) (config, error) {
 	flags.StringVar(&configPath, "config", "", "JSON configuration file path")
 	flags.StringVar(&cfg.AuditFile, "audit-file", "", "audit log file path")
 	flags.StringVar(&cfg.AuditURL, "audit-url", "", "audit receiver URL")
+	flags.StringVar(&cfg.GRPCAddress, "grpc-address", "", "gRPC server host:port (empty disables gRPC)")
 	flags.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
 	flags.Var(secondsDurationFlag{value: &cfg.StoreInterval}, "i", "metrics store interval in seconds")
 	flags.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "metrics storage file path")
@@ -229,6 +255,7 @@ func parseConfig(args []string) (config, error) {
 
 	// Replay explicit flags after loading the file so defaults never mask file values.
 	if err := configfile.Load(configPath, &struct {
+		GRPCAddress   *string              `json:"grpc_address"`
 		Address       *string              `json:"address"`
 		Restore       *bool                `json:"restore"`
 		StoreInterval *configfile.Duration `json:"store_interval"`
@@ -239,7 +266,7 @@ func parseConfig(args []string) (config, error) {
 		AuditFile     *string              `json:"audit_file"`
 		TrustedSubnet *string              `json:"trusted_subnet"`
 		AuditURL      *string              `json:"audit_url"`
-	}{&cfg.ServerAddress, &cfg.Restore, (*configfile.Duration)(&cfg.StoreInterval), &cfg.FileStoragePath, &cfg.DatabaseDSN, &cfg.CryptoKey, &cfg.Key, &cfg.AuditFile, &cfg.TrustedSubnet, &cfg.AuditURL}); err != nil {
+	}{&cfg.GRPCAddress, &cfg.ServerAddress, &cfg.Restore, (*configfile.Duration)(&cfg.StoreInterval), &cfg.FileStoragePath, &cfg.DatabaseDSN, &cfg.CryptoKey, &cfg.Key, &cfg.AuditFile, &cfg.TrustedSubnet, &cfg.AuditURL}); err != nil {
 		return config{}, err
 	}
 	if err := flags.Parse(args); err != nil {
@@ -255,6 +282,9 @@ func parseConfig(args []string) (config, error) {
 		return config{}, fmt.Errorf("failed parse env: %w", err)
 	}
 
+	if value, ok := os.LookupEnv("GRPC_ADDRESS"); ok {
+		cfg.GRPCAddress = value
+	}
 	// An explicitly empty environment value disables a subnet set by file or flag.
 	if value, ok := os.LookupEnv("TRUSTED_SUBNET"); ok {
 		cfg.TrustedSubnet = value
